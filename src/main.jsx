@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowLeft, ArrowRight, BarChart3, Bell, BookOpen, BriefcaseBusiness, Check, ChevronDown, CircleDollarSign, Download, FileChartColumn, FileSpreadsheet, FileText, LayoutDashboard, Lock, MoreHorizontal, PencilLine, Plus, Search, Settings, Sparkles, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BarChart3, Bell, BookOpen, BriefcaseBusiness, Check, ChevronDown, CircleDollarSign, Copy, Download, FileChartColumn, FileSpreadsheet, FileText, LayoutDashboard, Lock, MoreHorizontal, PencilLine, Plus, Search, Settings, Sparkles, Trash2, Users } from 'lucide-react';
 import { annualize, projectFinancials } from './finance.js';
 import './styles.css';
 
@@ -9,20 +9,20 @@ const steps = ['Business overview', 'Ownership & management', 'Products & servic
 const flow = ['Sign up', 'Create plan', 'Questionnaire', 'Financials', 'Review', 'Generate', 'Edit', 'Download'];
 const flowView = { signup: 0, setup: 1, builder: 2, financials: 3, review: 4, generating: 5, editor: 6 };
 const initialPlans = [
-  { name: 'Acme Studio — Growth Plan', company: 'Acme Creative Studio', stage: 'Draft', progress: 72, updated: 'Today, 9:42 AM' },
-  { name: 'Northstar Consulting', company: 'Northstar Advisory Inc.', stage: 'Ready to generate', progress: 100, updated: 'Jul 26, 2026' },
-  { name: 'Greenline Services', company: 'Greenline Property Services', stage: 'Draft', progress: 38, updated: 'Jul 18, 2026' }
+  { id: 1, name: 'Acme Studio — Growth Plan', company: 'Acme Creative Studio', stage: 'Draft', progress: 72, updated: 'Today, 9:42 AM' },
+  { id: 2, name: 'Northstar Consulting', company: 'Northstar Advisory Inc.', stage: 'Ready to generate', progress: 100, updated: 'Jul 26, 2026' },
+  { id: 3, name: 'Greenline Services', company: 'Greenline Property Services', stage: 'Draft', progress: 38, updated: 'Jul 18, 2026' }
 ];
 
 function App() {
-  const [view, setView] = useState('landing');
+  const [view, setView] = useState('dashboard');
   const [activeStep, setActiveStep] = useState(0);
   const [plans, setPlans] = useState(initialPlans);
   const [toast, setToast] = useState('');
   const [form, setForm] = useState({ planName: 'Acme Studio — Growth Plan', businessName: 'Acme Creative Studio', country: 'United States', region: 'New York', city: 'Brooklyn', stage: 'Expansion', purpose: 'Bank or lender', currency: 'USD', description: 'A strategy and design studio helping growing organizations build clear brands and effective digital experiences.', problem: 'Growing businesses often lack consistent brand direction and an experienced, flexible creative team.', difference: 'Senior-level expertise, a focused process, and flexible project or retainer engagements.', shortGoals: 'Build recurring client revenue and hire a full-time designer.', longGoals: 'Become the trusted creative partner for growth-stage organizations across the United States.' });
   const update = (key, value) => setForm(f => ({ ...f, [key]: value }));
   const notify = msg => { setToast(msg); setTimeout(() => setToast(''), 2400); };
-  const createPlan = () => { setPlans(p => [{ name: form.planName || 'Untitled business plan', company: form.businessName || 'New business', stage: 'Draft', progress: 9, updated: 'Just now' }, ...p]); setView('builder'); };
+  const createPlan = () => { setPlans(p => [{ id: Date.now(), name: form.planName || 'Untitled business plan', company: form.businessName || 'New business', stage: 'Draft', progress: 9, updated: 'Just now' }, ...p]); setView('builder'); };
 
   return <div className={'app '+(['landing','signup'].includes(view) ? 'auth-app' : '')}>
     <Sidebar view={view} setView={setView} />
@@ -31,7 +31,7 @@ function App() {
       {!['landing','signup','dashboard'].includes(view) && <FlowTracker current={view === 'editor' ? 6 : flowView[view] ?? 0} />}
       {view === 'landing' && <Landing onStart={() => setView('signup')} />}
       {view === 'signup' && <SignUp onContinue={() => setView('setup')} onBack={() => setView('landing')} />}
-      {view === 'dashboard' && <Dashboard plans={plans} onCreate={() => setView('setup')} setView={setView} notify={notify} />}
+      {view === 'dashboard' && <Dashboard plans={plans} setPlans={setPlans} onCreate={() => setView('setup')} setView={setView} notify={notify} />}
       {view === 'setup' && <Setup form={form} update={update} onCancel={() => setView('dashboard')} onCreate={createPlan} />}
       {view === 'builder' && <Builder form={form} update={update} activeStep={activeStep} setActiveStep={setActiveStep} setView={setView} notify={notify} />}
       {view === 'financials' && <Financials setView={setView} />}
@@ -70,9 +70,33 @@ function Sidebar({ view, setView }) {
 
 function Topbar(){ return <header><div className="mobile-brand">TheBizPlans AI</div><div className="top-actions"><button className="icon"><Search size={19}/></button><button className="icon"><Bell size={19}/><i/></button><div className="help">Need help? <b>View guide</b></div></div></header> }
 
-function Dashboard({plans,onCreate,setView,notify}) { return <div className="page"><div className="welcome"><div><span className="eyebrow">WORKSPACE</span><h1>Good morning, Alex.</h1><p>Turn your business idea into a clear, lender-ready plan.</p></div><button className="primary" onClick={onCreate}><Plus size={18}/>Create new plan</button></div>
-  <div className="stats"><Stat icon={BookOpen} value="3" label="Business plans" tone="blue"/><Stat icon={Check} value="1" label="Ready to generate" tone="green"/><Stat icon={FileChartColumn} value="72%" label="Average completion" tone="orange"/><Stat icon={Download} value="2" label="Exports this month" tone="purple"/></div>
-  <section className="card plans"><div className="card-head"><div><h2>Your business plans</h2><p>Continue where you left off or start something new.</p></div><button className="secondary">All plans <ChevronDown size={16}/></button></div><div className="table"><div className="tr labels"><span>PLAN</span><span>STATUS</span><span>PROGRESS</span><span>LAST UPDATED</span><span></span></div>{plans.map((p,i)=><div className="tr" key={p.name}><div className="plan-name"><div className={'file-icon c'+i}><FileText size={20}/></div><div><strong>{p.name}</strong><small>{p.company}</small></div></div><div><span className={'badge '+(p.progress===100?'ready':'draft')}>{p.progress===100?<Check size={12}/>:null}{p.stage}</span></div><div className="progress-cell"><div className="progress"><i style={{width:p.progress+'%'}}/></div><b>{p.progress}%</b></div><div className="updated">{p.updated}</div><button className="icon" onClick={()=>{setView(p.progress===100?'editor':'builder');notify('Plan opened')}}><ArrowRight size={18}/></button></div>)}</div></section>
+function Dashboard({plans,setPlans,onCreate,setView,notify}) {
+  const average = plans.length ? Math.round(plans.reduce((sum, plan) => sum + plan.progress, 0) / plans.length) : 0;
+  const duplicatePlan = plan => {
+    setPlans(current => [{ ...plan, id: Date.now(), name: `${plan.name} (Copy)`, stage: 'Draft', updated: 'Just now' }, ...current]);
+    notify('Plan duplicated');
+  };
+  const deletePlan = plan => {
+    setPlans(current => current.filter(item => item.id !== plan.id));
+    notify('Plan deleted');
+  };
+  const downloadPlan = plan => {
+    const file = new Blob([`${plan.name}\n${plan.company}\n\nBusiness plan — ${plan.progress}% complete`], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(file);
+    link.download = `${plan.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.txt`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    notify('Plan downloaded');
+  };
+  const generatePlan = plan => {
+    if (plan.progress < 100) return;
+    setView('generating');
+    setTimeout(() => setView('editor'), 900);
+  };
+  return <div className="page"><div className="welcome"><div><span className="eyebrow">WORKSPACE</span><h1>Good morning, Alex.</h1><p>Manage your plans and pick up right where you left off.</p></div><button className="primary" onClick={onCreate}><Plus size={18}/>Create new plan</button></div>
+  <div className="stats"><Stat icon={BookOpen} value={plans.length} label="Business plans" tone="blue"/><Stat icon={Check} value={plans.filter(p=>p.progress===100).length} label="Ready to generate" tone="green"/><Stat icon={FileChartColumn} value={average+'%'} label="Average completion" tone="orange"/><Stat icon={Download} value="2" label="Exports this month" tone="purple"/></div>
+  <section className="card plans"><div className="card-head"><div><h2>Existing plans</h2><p>Continue where you left off or start something new.</p></div><button className="secondary">All plans <ChevronDown size={16}/></button></div><div className="table"><div className="tr labels"><span>PLAN</span><span>STATUS</span><span>COMPLETION</span><span>LAST UPDATED</span><span>ACTIONS</span></div>{plans.map((p,i)=><div className="tr" key={p.id}><button className="plan-name plan-open" onClick={()=>setView(p.progress===100?'editor':'builder')}><div className={'file-icon c'+(i%3)}><FileText size={20}/></div><div><strong>{p.name}</strong><small>{p.company}</small></div></button><div><span className={'badge '+(p.progress===100?'ready':'draft')}>{p.progress===100?<Check size={12}/>:null}{p.stage}</span></div><div className="progress-cell"><div className="progress"><i style={{width:p.progress+'%'}}/></div><b>{p.progress}%</b></div><div className="updated">{p.updated}</div><div className="plan-actions"><button className="generate-action" disabled={p.progress<100} title={p.progress<100?'Complete the plan before generating':'Generate plan'} onClick={()=>generatePlan(p)}><Sparkles size={14}/>Generate</button><button title="Download plan" aria-label={`Download ${p.name}`} onClick={()=>downloadPlan(p)}><Download size={16}/></button><button title="Duplicate plan" aria-label={`Duplicate ${p.name}`} onClick={()=>duplicatePlan(p)}><Copy size={16}/></button><button className="delete-action" title="Delete plan" aria-label={`Delete ${p.name}`} onClick={()=>deletePlan(p)}><Trash2 size={16}/></button></div></div>)}</div></section>
   <div className="dashboard-grid"><section className="card next"><div className="mini-icon"><Sparkles/></div><div><span className="eyebrow">RECOMMENDED NEXT STEP</span><h2>Finish your financial assumptions</h2><p>Add revenue, expense and staffing assumptions to unlock your 36-month projection.</p><button className="link" onClick={()=>setView('financials')}>Continue financials <ArrowRight size={16}/></button></div></section><section className="card checklist"><h2>Plan readiness</h2><p>Acme Studio — Growth Plan</p>{[['Business information',100],['Products & customers',100],['Operations & staffing',75],['Financial assumptions',42]].map(x=><div className="check-row" key={x[0]}><span>{x[1]===100?<Check size={14}/>:<i/>}{x[0]}</span><b>{x[1]}%</b></div>)}</section></div>
   </div> }
 function Stat({icon:Icon,value,label,tone}){return <div className="stat card"><div className={'stat-icon '+tone}><Icon/></div><div><strong>{value}</strong><span>{label}</span></div></div>}
