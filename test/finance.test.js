@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { projectFinancials, annualize, loanSchedule, monthlyPayroll } from '../src/finance.js';
+import { projectFinancials, annualize, financialAnalysis, loanSchedule, monthlyPayroll } from '../src/finance.js';
 
 test('creates 36 growing monthly projections', () => {
   const rows = projectFinancials({ price: 10, units: 100, growth: .1, directCost: .2, expenses: 0, payroll: 0, openingCash: 0 });
@@ -35,4 +35,28 @@ test('projects multiple revenue streams with refunds and annual increases', () =
   assert.equal(rows[0].revenue, 900);
   assert.equal(rows[0].cost, 180);
   assert.equal(Math.round(rows[12].revenue), 990);
+});
+
+test('produces complete monthly statements with debt, depreciation and cash flow', () => {
+  const rows = projectFinancials({ price: 20, units: 100, directCost: .25, expenses: 300, payroll: 400, openingCash: 1000, depreciableAssets: 1200, depreciationYears: 1, loan: { amount: 1200, annualRate: 0, amortizationYears: 1 }, taxRate: 10 });
+  assert.equal(rows.length, 36);
+  assert.equal(rows[0].depreciation, 100);
+  assert.equal(rows[0].principalPayment, 100);
+  assert.equal(rows[0].loanBalance, 1100);
+  assert.equal(rows[0].netIncome, 630);
+  assert.equal(rows[0].cashFlow, 630);
+  assert.equal(rows[0].closingCash, 2830);
+  assert.equal(rows[0].totalAssets, rows[0].closingCash + rows[0].fixedAssets);
+});
+
+test('creates three annual statements, revenue mix and financial analysis', () => {
+  const rows = projectFinancials({ revenues: [{ name: 'Subscriptions', price: 100, units: 10, directCost: .2 }], expenses: 100, payroll: 200, openingCash: 5000 });
+  const years = annualize(rows);
+  const analysis = financialAnalysis(rows);
+  assert.equal(years[0].streams.Subscriptions, 12000);
+  assert.equal(years[0].cashFlow, years[0].netIncome);
+  assert.equal(analysis.grossMargin, .8);
+  assert.equal(analysis.breakEvenSales, 375);
+  assert.equal(analysis.breakEvenMonth, 1);
+  assert.equal(analysis.cashRunway, 36);
 });

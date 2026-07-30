@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowLeft, ArrowRight, BarChart3, Bell, BookOpen, BriefcaseBusiness, Check, ChevronDown, CircleDollarSign, Copy, Download, FileChartColumn, FileSpreadsheet, FileText, LayoutDashboard, Lock, MoreHorizontal, PencilLine, Plus, Search, Settings, Sparkles, Trash2, Users } from 'lucide-react';
-import { annualize, loanSchedule, monthlyPayroll, projectFinancials } from './finance.js';
+import { annualize, financialAnalysis, loanSchedule, monthlyPayroll, projectFinancials } from './finance.js';
 import './styles.css';
 
 const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -187,7 +187,8 @@ function Financials({setView}) {
     ['expenses','C','Operating expenses','Recurring overhead'],
     ['payroll','D','Payroll','Calculated from staffing records'],
     ['loan','E','Loan assumptions','Financing and repayment'],
-    ['tax','F','Tax assumptions','Tax, depreciation and draws']
+    ['tax','F','Tax assumptions','Tax, depreciation and draws'],
+    ['outputs','G','Financial outputs','Statements, analysis and charts']
   ];
   const [active,setActive]=useState('revenue');
   const [revenues,setRevenues]=useState([{name:'Creative services',price:85,units:120,growth:4,seasonal:0,annualPriceIncrease:3,directCost:28,paymentTiming:'Due on receipt',refundRate:1}]);
@@ -200,8 +201,10 @@ function Financials({setView}) {
   const operatingExpenses=Object.values(expenses).reduce((sum,value)=>sum+Number(value||0),0);
   const payroll=staff.reduce((sum,row)=>sum+monthlyPayroll(row),0);
   const openingCash=Number(startup.workingCapital||0);
-  const months=useMemo(()=>projectFinancials({revenues:revenues.map(row=>({...row,growth:Number(row.growth||0)/100,directCost:Number(row.directCost||0)/100})),expenses:operatingExpenses,payroll,openingCash,taxRate:tax.incomeTaxRate}),[revenues,operatingExpenses,payroll,openingCash,tax.incomeTaxRate]);
+  const depreciableAssets=Number(startup.equipment||0)+Number(startup.furniture||0)+Number(startup.renovations||0)+Number(startup.leaseholdImprovements||0)+Number(startup.vehicle||0);
+  const months=useMemo(()=>projectFinancials({revenues:revenues.map(row=>({...row,growth:Number(row.growth||0)/100,directCost:Number(row.directCost||0)/100})),expenses:operatingExpenses,payroll,openingCash,taxRate:tax.incomeTaxRate,loan,depreciableAssets,ownerDraws:tax.ownerDraws,inventory:startup.inventory}),[revenues,operatingExpenses,payroll,openingCash,tax.incomeTaxRate,tax.ownerDraws,loan,depreciableAssets,startup.inventory]);
   const years=annualize(months);
+  const analysis=financialAnalysis(months);
   const schedule=useMemo(()=>loanSchedule(loan),[loan]);
   const fieldGrid=(values,setter,fields)=><div className="financial-field-grid">{fields.map(([key,label,suffix])=><Field key={key} label={label+(suffix?` (${suffix})`:'')} value={values[key]} onChange={value=>updateObject(setter,key,value)}/>)}</div>;
   const startupFields=[['businessPurchase','Business purchase','$'],['equipment','Equipment','$'],['furniture','Furniture','$'],['renovations','Renovations','$'],['leaseholdImprovements','Leasehold improvements','$'],['inventory','Inventory','$'],['deposits','Deposits','$'],['website','Website','$'],['software','Software','$'],['legalFees','Legal fees','$'],['accountingFees','Accounting fees','$'],['marketing','Marketing','$'],['licensing','Licensing','$'],['insurance','Insurance','$'],['vehicle','Vehicle','$'],['workingCapital','Working capital','$'],['otherCosts','Other costs','$']];
@@ -215,12 +218,37 @@ function Financials({setView}) {
         {active==='payroll'&&<><div className="formula-callout"><b>Monthly payroll</b><span>Hourly wage × hours/week × 52 ÷ 12 &nbsp; or &nbsp; Annual salary ÷ 12</span></div>{staff.map((row,index)=><div className="repeat-card payroll-card" key={index}><div className="repeat-head"><h2>Staffing record {index+1}</h2>{staff.length>1&&<button onClick={()=>setStaff(staff.filter((_,i)=>i!==index))}><Trash2 size={16}/></button>}</div><div className="financial-field-grid"><Field label="Role or employee" value={row.role} onChange={v=>setStaff(staff.map((x,i)=>i===index?{...x,role:v}:x))}/><Select label="Pay type" value={row.payType} options={['Salary','Hourly']} onChange={v=>setStaff(staff.map((x,i)=>i===index?{...x,payType:v}:x))}/>{(row.payType==='Salary'?[['annualSalary','Annual salary ($)']]:[['hourlyWage','Hourly wage ($)'],['hoursPerWeek','Hours per week']]).concat([['payrollTaxes','Payroll taxes (%)'],['benefits','Benefits (%)'],['vacationPay','Vacation pay (%)'],['employerContributions','Employer contributions (%)'],['annualIncrease','Annual salary increase (%)']]).map(([key,label])=><Field key={key} label={label} value={row[key]} onChange={v=>setStaff(staff.map((x,i)=>i===index?{...x,[key]:v}:x))}/>)}</div><div className="record-total"><span>Calculated monthly payroll</span><strong>{money(monthlyPayroll(row))}</strong></div></div>)}<button className="add-row" onClick={()=>setStaff([...staff,{role:'New position',payType:'Hourly',hourlyWage:20,hoursPerWeek:40,annualSalary:0,payrollTaxes:8,benefits:0,vacationPay:4,employerContributions:2,annualIncrease:3}])}><Plus size={16}/>Add staffing record</button><FinancialTotal label="Total monthly payroll" value={payroll}/></>}
         {active==='loan'&&<><div className="financial-field-grid">{[['amount','Loan amount ($)'],['annualRate','Interest rate (%)'],['amortizationYears','Amortization period (years)'],['paymentFrequency','Payment frequency'],['interestOnlyMonths','Interest-only period (months)'],['startDate','Start date']].map(([key,label])=><Field key={key} label={label} value={loan[key]} onChange={v=>updateObject(setLoan,key,v)}/>)}</div><div className="loan-summary"><div><span>Monthly payment</span><strong>{money(schedule[0]?.payment||0)}</strong></div><div><span>Month 1 principal</span><strong>{money(schedule[0]?.principal||0)}</strong></div><div><span>Month 1 interest</span><strong>{money(schedule[0]?.interest||0)}</strong></div><div><span>Closing balance</span><strong>{money(schedule[0]?.closingBalance||0)}</strong></div></div></>}
         {active==='tax'&&<>{fieldGrid(tax,setTax,[['incomeTaxRate','Corporate income-tax rate','%'],['salesTaxRate','Sales-tax rate, where applicable','%'],['depreciation','Depreciation assumption'],['openingLosses','Opening losses','$'],['ownerDraws','Dividend or owner-draw assumptions','$ / month']])}</>}
+        {active==='outputs'&&<FinancialOutputs months={months} years={years} analysis={analysis}/>}
       </div>
       <div className="metrics finance-metrics"><Metric label="Year 1 revenue" value={money(years[0].revenue)} trend="Live forecast"/><Metric label="Year 1 gross margin" value={(years[0].revenue?years[0].grossProfit/years[0].revenue*100:0).toFixed(1)+'%'} trend="After direct costs"/><Metric label="Break-even" value={months.find(x=>x.ebitda>0)?.month?'Month '+months.find(x=>x.ebitda>0).month:'Not reached'} trend="Operating basis"/></div></section>
     </div>
   </div>;
 }
 function FinancialTotal({label,value}){return <div className="financial-total"><span>{label}</span><strong>{money(value)}</strong></div>}
+
+function FinancialOutputs({months,years,analysis}) {
+  const [period,setPeriod]=useState('annual');
+  const [statement,setStatement]=useState('income');
+  const percent=value=>(value*100).toFixed(1)+'%';
+  const statementRows={
+    income:[['Revenue','revenue'],['Cost of sales','cost'],['Gross profit','grossProfit'],['Payroll','payroll'],['Operating expenses','expenses'],['EBITDA','ebitda'],['Depreciation','depreciation'],['Interest','interest'],['Taxes','tax'],['Net income','netIncome']],
+    cashflow:[['Operating cash flow','operatingCashFlow'],['Loan principal','principalPayment'],['Owner draws','ownerDraws'],['Net cash flow','cashFlow'],['Closing cash','closingCash']],
+    balance:[['Cash','closingCash'],['Accounts receivable','receivables'],['Inventory','inventory'],['Fixed assets, net','fixedAssets'],['Total assets','totalAssets'],['Current liabilities','currentLiabilities'],['Loan balance','loanBalance'],['Equity','equity']]
+  };
+  const chartSeries=[['Revenue growth','revenue'],['Gross profit','grossProfit'],['EBITDA','ebitda'],['Net income','netIncome'],['Closing cash','closingCash']];
+  const max=Math.max(...years.flatMap(year=>chartSeries.map(([,key])=>Math.abs(year[key]||0))),1);
+  const indicators=[['Gross margin',percent(analysis.grossMargin)],['EBITDA margin',percent(analysis.ebitdaMargin)],['Net margin',percent(analysis.netMargin)],['Break-even sales',money(analysis.breakEvenSales)],['Break-even month',analysis.breakEvenMonth?`Month ${analysis.breakEvenMonth}`:'Not reached'],['Debt-service coverage',analysis.debtServiceCoverageRatio==null?'N/A':analysis.debtServiceCoverageRatio.toFixed(2)+'×'],['Current ratio',analysis.currentRatio==null?'N/A':analysis.currentRatio.toFixed(2)+'×'],['Working-capital requirement',money(analysis.workingCapitalRequirement)],['Loan balance',money(analysis.loanBalance)],['Cash runway',analysis.cashRunway>=36?'36+ months':`${analysis.cashRunway} months`]];
+  return <div className="outputs">
+    <div className="output-toolbar"><div><button className={period==='annual'?'active':''} onClick={()=>setPeriod('annual')}>Annual statements</button><button className={period==='monthly'?'active':''} onClick={()=>setPeriod('monthly')}>Monthly projection</button></div><span>36 months · Years 1–3</span></div>
+    {period==='annual'?<><div className="statement-tabs">{[['income','Income statement'],['cashflow','Cash-flow statement'],['balance','Balance sheet']].map(([id,label])=><button key={id} className={statement===id?'active':''} onClick={()=>setStatement(id)}>{label}</button>)}</div><FinancialTable rows={statementRows[statement]} columns={years} labels={years.map(year=>`Year ${year.year}`)}/></>:<div className="monthly-scroll"><FinancialTable rows={[['Revenue','revenue'],['Cost of sales','cost'],['Gross profit','grossProfit'],['Payroll','payroll'],['Operating expenses','expenses'],['EBITDA','ebitda'],['Depreciation','depreciation'],['Interest','interest'],['Taxes','tax'],['Net income','netIncome'],['Cash flow','cashFlow'],['Closing cash','closingCash']]} columns={months} labels={months.map(row=>`M${row.month}`)}/></div>}
+    <h3 className="output-heading">Financial analysis</h3><div className="analysis-grid">{indicators.map(([label,value])=><div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
+    <h3 className="output-heading">Performance charts</h3><div className="chart-grid">{chartSeries.map(([label,key])=><div className="finance-chart" key={key}><div><strong>{label}</strong><span>{money(years[2][key])} in Year 3</span></div><div className="bars">{years.map(year=><i key={year.year} style={{height:`${Math.max(5,Math.abs(year[key])/max*100)}%`}}><small>Y{year.year}</small></i>)}</div></div>)}<RevenueMix years={years}/><BreakEvenChart months={months} breakEvenMonth={analysis.breakEvenMonth}/></div>
+  </div>;
+}
+function FinancialTable({rows,columns,labels}) { return <div className="financial-table"><div className="financial-row head"><b>Line item</b>{labels.map(label=><b key={label}>{label}</b>)}</div>{rows.map(([label,key])=><div className={'financial-row '+(['grossProfit','ebitda','netIncome','cashFlow','closingCash','totalAssets','equity'].includes(key)?'total':'')} key={key}><span>{label}</span>{columns.map((column,index)=><span key={index}>{money(column[key]||0)}</span>)}</div>)}</div> }
+function RevenueMix({years}) { const streams=Object.keys(years[0].streams||{}); const total=Object.values(years[0].streams||{}).reduce((a,b)=>a+b,0)||1; return <div className="finance-chart mix-chart"><div><strong>Revenue by stream</strong><span>Year 1 mix</span></div><div className="mix-bar">{streams.map((name,index)=><i key={name} style={{width:`${years[0].streams[name]/total*100}%`,background:['#2e67d1','#18a47b','#e59b39'][index%3]}}/>)}</div>{streams.map((name,index)=><small key={name}><i style={{background:['#2e67d1','#18a47b','#e59b39'][index%3]}}/>{name} · {percentValue(years[0].streams[name]/total)}</small>)}</div> }
+function BreakEvenChart({months,breakEvenMonth}) { const expenses=months.map(row=>row.payroll+row.expenses); const max=Math.max(...months.map((row,index)=>Math.max(row.grossProfit,expenses[index])),1); return <div className="finance-chart break-chart"><div><strong>Break-even</strong><span>{breakEvenMonth?`Reached in month ${breakEvenMonth}`:'Not reached in forecast'}</span></div><div className="break-lines"><i style={{width:`${Math.min(100,(breakEvenMonth||36)/36*100)}%`}}/><b style={{left:`${Math.min(98,(breakEvenMonth||36)/36*100)}%`}}/></div><small>Gross profit crosses fixed operating costs</small></div> }
+const percentValue=value=>(value*100).toFixed(0)+'%';
 
 function Metric({label,value,trend}){return <div className="card metric"><span>{label}</span><strong>{value}</strong><small><Check size={13}/>{trend}</small></div>}
 
