@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowLeft, ArrowRight, BarChart3, Bell, BookOpen, BriefcaseBusiness, Check, ChevronDown, CircleDollarSign, Download, FileChartColumn, FileSpreadsheet, FileText, LayoutDashboard, Lock, MoreHorizontal, Plus, Search, Settings, Sparkles, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BarChart3, Bell, BookOpen, BriefcaseBusiness, Check, ChevronDown, CircleDollarSign, Download, FileChartColumn, FileSpreadsheet, FileText, LayoutDashboard, Lock, MoreHorizontal, PencilLine, Plus, Search, Settings, Sparkles, Users } from 'lucide-react';
 import { annualize, projectFinancials } from './finance.js';
 import './styles.css';
 
@@ -15,7 +15,7 @@ const initialPlans = [
 ];
 
 function App() {
-  const [view, setView] = useState('signup');
+  const [view, setView] = useState('landing');
   const [activeStep, setActiveStep] = useState(0);
   const [plans, setPlans] = useState(initialPlans);
   const [toast, setToast] = useState('');
@@ -24,12 +24,13 @@ function App() {
   const notify = msg => { setToast(msg); setTimeout(() => setToast(''), 2400); };
   const createPlan = () => { setPlans(p => [{ name: form.planName || 'Untitled business plan', company: form.businessName || 'New business', stage: 'Draft', progress: 9, updated: 'Just now' }, ...p]); setView('builder'); };
 
-  return <div className={'app '+(view === 'signup' ? 'auth-app' : '')}>
+  return <div className={'app '+(['landing','signup'].includes(view) ? 'auth-app' : '')}>
     <Sidebar view={view} setView={setView} />
     <main>
-      <Topbar />
-      {view !== 'dashboard' && <FlowTracker current={view === 'editor' ? 6 : flowView[view] ?? 0} />}
-      {view === 'signup' && <SignUp onContinue={() => setView('setup')} />}
+      {!['landing','signup'].includes(view) && <Topbar />}
+      {!['landing','signup','dashboard'].includes(view) && <FlowTracker current={view === 'editor' ? 6 : flowView[view] ?? 0} />}
+      {view === 'landing' && <Landing onStart={() => setView('signup')} />}
+      {view === 'signup' && <SignUp onContinue={() => setView('setup')} onBack={() => setView('landing')} />}
       {view === 'dashboard' && <Dashboard plans={plans} onCreate={() => setView('setup')} setView={setView} notify={notify} />}
       {view === 'setup' && <Setup form={form} update={update} onCancel={() => setView('dashboard')} onCreate={createPlan} />}
       {view === 'builder' && <Builder form={form} update={update} activeStep={activeStep} setActiveStep={setActiveStep} setView={setView} notify={notify} />}
@@ -42,14 +43,29 @@ function App() {
   </div>;
 }
 
+function Brand() { return <div className="public-brand"><div className="logo"><FileChartColumn/></div><div>TheBizPlans <b>AI</b></div></div> }
+
+function Landing({ onStart }) {
+  const sections = ['Executive summary','Company overview','Market analysis','Products & services','Sales & marketing','Operations plan'];
+  return <div className="landing">
+    <nav className="landing-nav"><Brand/><div><a href="#included">What’s included</a><a href="#how">How it works</a><button className="nav-login" onClick={onStart}>Sign in</button><button className="primary" onClick={onStart}>Create My Business Plan</button></div></nav>
+    <section className="hero"><div className="hero-copy"><span className="hero-pill"><Sparkles size={14}/> AI-guided business planning</span><h1>A professional business plan,<br/><em>built around your idea.</em></h1><p>Answer a few guided questions and turn your vision into a clear, lender-ready business plan—with financial projections included.</p><div className="hero-actions"><button className="primary hero-cta" onClick={onStart}>Create My Business Plan <ArrowRight size={18}/></button><span>No credit card required</span></div><div className="hero-trust"><span><Check/>Step-by-step guidance</span><span><Check/>Edit anything</span><span><Check/>Download anytime</span></div></div>
+      <div className="plan-preview"><div className="preview-top"><div className="preview-brand"><FileChartColumn size={17}/></div><span>YOUR BUSINESS PLAN</span><i>Draft</i></div><h2>Brightside Coffee Co.</h2><p>BUSINESS PLAN · 2026–2029</p><div className="preview-rule"/><div className="preview-content"><span>EXECUTIVE SUMMARY</span><h3>A neighborhood coffee shop built for connection.</h3><i/><i/><i className="short"/><div className="preview-metrics"><div><b>$248K</b><small>YEAR 1 REVENUE</small></div><div><b>64%</b><small>GROSS MARGIN</small></div><div><b>Month 8</b><small>BREAK-EVEN</small></div></div></div><div className="floating-chip chip-edit"><PencilLine/>Fully editable</div><div className="floating-chip chip-finance"><BarChart3/>3-year projections</div></div>
+    </section>
+    <section className="included" id="included"><div className="section-heading"><span className="eyebrow">EVERYTHING YOU NEED</span><h2>One plan. Every essential section.</h2><p>We guide you through the questions that matter, then organize your answers into a professional format.</p></div><div className="section-grid"><div className="section-list">{sections.map((s,i)=><div key={s}><span>{String(i+1).padStart(2,'0')}</span><b>{s}</b><Check/></div>)}</div><div className="finance-feature"><div className="feature-icon"><BarChart3/></div><span className="eyebrow">FINANCIALS INCLUDED</span><h3>Numbers that tell your story.</h3><p>Build 3-year revenue, expense, cash flow, and profitability projections with simple inputs—no spreadsheet expertise needed.</p><div className="mini-chart"><i/><i/><i/><i/><i/><i/></div><span className="chart-label">Projected monthly revenue</span></div></div></section>
+    <section className="finish" id="how"><div><span className="eyebrow">YOUR PLAN, YOUR WAY</span><h2>Polish it. Share it. Put it to work.</h2><p>Edit every word in your finished plan, then download the formats you need for lenders, investors, partners, or your own next steps.</p><div className="format-row"><span><FileText/>Word<small>Easy to edit</small></span><span><FileChartColumn/>PDF<small>Ready to share</small></span><span><FileSpreadsheet/>Excel<small>All financials</small></span></div></div><div className="finish-cta"><h3>Ready to build your business plan?</h3><p>Start with your idea. We’ll guide you from there.</p><button className="primary hero-cta" onClick={onStart}>Create My Business Plan <ArrowRight/></button></div></section>
+    <footer><Brand/><span>© 2026 TheBizPlans AI</span><span>Privacy &nbsp; Terms</span></footer>
+  </div>
+}
+
 function FlowTracker({ current }) { return <div className="flow-wrap"><div className="flow-track">{flow.map((label, index) => <React.Fragment key={label}><div className={'flow-step '+(index < current ? 'done' : index === current ? 'current' : '')}><span>{index < current ? <Check size={13}/> : index + 1}</span><b>{label}</b></div>{index < flow.length - 1 && <i/>}</React.Fragment>)}</div></div> }
 
-function SignUp({ onContinue }) { const [name,setName]=useState('Alex Morgan'); const [email,setEmail]=useState('alex@acmestudio.co'); return <div className="auth-page"><section className="auth-copy"><div className="auth-mark"><FileChartColumn size={26}/></div><span className="eyebrow">THEBIZPLANS AI</span><h1>Your business plan,<br/>step by step.</h1><p>Answer clear questions, add your numbers, and turn your idea into a professional plan you can edit and download.</p><div className="auth-points"><span><Check/>Simple guided questionnaire</span><span><Check/>Built-in financial projections</span><span><Check/>Word, PDF and Excel exports</span></div></section><section className="card signup-card"><span className="eyebrow">GET STARTED</span><h1>Create your account</h1><p>Start your first business plan in a few minutes.</p><Field label="Your name" value={name} onChange={setName}/><Field label="Email address" value={email} onChange={setEmail}/><Field label="Password" value="••••••••••" onChange={()=>{}}/><button className="primary signup-button" onClick={onContinue}>Sign up & create a plan <ArrowRight size={17}/></button><small><Lock size={12}/> Your information is private and securely stored.</small><div className="signin">Already have an account? <b>Sign in</b></div></section></div> }
+function SignUp({ onContinue, onBack }) { const [mode,setMode]=useState('signup'); const [name,setName]=useState(''); const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); return <div className="auth-shell"><div className="auth-nav"><button onClick={onBack}><Brand/></button><button className="back-home" onClick={onBack}><ArrowLeft size={16}/> Back to home</button></div><div className="auth-page"><section className="auth-copy"><span className="hero-pill"><Sparkles size={14}/> YOUR PLAN STARTS HERE</span><h1>Turn your business idea into a plan you’re proud to share.</h1><p>Join entrepreneurs using TheBizPlans AI to move from blank page to a polished, professional plan.</p><div className="auth-points"><span><Check/>Guided, plain-language questions</span><span><Check/>Built-in 3-year financial projections</span><span><Check/>Editable Word, PDF and Excel exports</span></div><div className="auth-quote">“It gave me the structure and confidence to finally put my business idea on paper.”<b>— Maya, small business owner</b></div></section><section className="card signup-card">{mode==='reset'?<><span className="eyebrow">PASSWORD RESET</span><h1>Reset your password</h1><p>Enter your email and we’ll send you a secure reset link.</p><Field label="Email address" value={email} onChange={setEmail} placeholder="you@company.com"/><button className="primary signup-button" onClick={()=>setMode('signin')}>Send reset link <ArrowRight size={17}/></button><button className="text-button" onClick={()=>setMode('signin')}><ArrowLeft size={14}/> Back to sign in</button></>:<><span className="eyebrow">{mode==='signup'?'CREATE YOUR ACCOUNT':'WELCOME BACK'}</span><h1>{mode==='signup'?'Start building today':'Sign in to your account'}</h1><p>{mode==='signup'?'Create your account and begin your plan in minutes.':'Continue working on your business plan.'}</p><button className="google-button" onClick={onContinue}><b>G</b> Continue with Google</button><div className="or"><span>or continue with email</span></div>{mode==='signup'&&<Field label="Your name" value={name} onChange={setName} placeholder="Alex Morgan"/>}<Field label="Email address" value={email} onChange={setEmail} placeholder="you@company.com"/><div className="password-label"><label>Password</label>{mode==='signin'&&<button onClick={()=>setMode('reset')}>Forgot password?</button>}</div><input type="password" value={password} placeholder="At least 8 characters" onChange={e=>setPassword(e.target.value)}/><button className="primary signup-button" onClick={onContinue}>{mode==='signup'?'Create account':'Sign in'} <ArrowRight size={17}/></button><small><Lock size={12}/> Your information is private and securely stored.</small><div className="signin">{mode==='signup'?'Already have an account?':'New to TheBizPlans AI?'} <button onClick={()=>setMode(mode==='signup'?'signin':'signup')}>{mode==='signup'?'Sign in':'Create an account'}</button></div></>}</section></div></div> }
 
 function Sidebar({ view, setView }) {
   const nav = [{id:'dashboard', icon:LayoutDashboard, label:'Dashboard'}, {id:'builder', icon:BookOpen, label:'Plan builder'}, {id:'financials', icon:BarChart3, label:'Financials'}, {id:'editor', icon:FileText, label:'Generated plan'}];
-  if (view === 'signup') return null;
-  return <aside><div className="brand"><div className="logo"><FileChartColumn/></div><div>TheBizPlans <b>AI</b><small>Business plans, made clear.</small></div></div><nav>{nav.map(({id,icon:Icon,label}) => <button className={view===id?'active':''} onClick={()=>setView(id)} key={id}><Icon size={19}/>{label}</button>)}</nav><div className="aside-bottom"><button><Users size={19}/>Team</button><button><Settings size={19}/>Settings</button><div className="upgrade"><Sparkles size={19}/><strong>Unlock your final plan</strong><span>Export Word, PDF & Excel</span><button>View plans</button></div><div className="user"><div className="avatar">AM</div><div><strong>Alex Morgan</strong><small>alex@acmestudio.co</small></div><MoreHorizontal size={18}/></div><MoreHorizontal size={18}/></div></div></aside>;
+  if (view === 'signup' || view === 'landing') return null;
+  return <aside><div className="brand"><div className="logo"><FileChartColumn/></div><div>TheBizPlans <b>AI</b><small>Business plans, made clear.</small></div></div><nav>{nav.map(({id,icon:Icon,label}) => <button className={view===id?'active':''} onClick={()=>setView(id)} key={id}><Icon size={19}/>{label}</button>)}</nav><div className="aside-bottom"><button><Users size={19}/>Team</button><button><Settings size={19}/>Settings</button><div className="upgrade"><Sparkles size={19}/><strong>Unlock your final plan</strong><span>Export Word, PDF & Excel</span><button>View plans</button></div><div className="user"><div className="avatar">AM</div><div><strong>Alex Morgan</strong><small>alex@acmestudio.co</small></div><MoreHorizontal size={18}/></div></div></aside>;
 }
 
 function Topbar(){ return <header><div className="mobile-brand">TheBizPlans AI</div><div className="top-actions"><button className="icon"><Search size={19}/></button><button className="icon"><Bell size={19}/><i/></button><div className="help">Need help? <b>View guide</b></div></div></header> }
