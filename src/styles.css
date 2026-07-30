@@ -27,3 +27,7 @@
 
 /* New plan setup context */
 .context-note{display:flex;align-items:flex-start;gap:10px;margin-top:20px;padding:13px 15px;border-radius:7px;background:#f4f8ff;color:#526b88;font-size:11px;line-height:1.45}.context-note svg{color:var(--blue);flex:none}.context-note strong{display:block;color:var(--navy);margin-bottom:2px}
+
+/* Generic questionnaire repeatable records */
+.section-prompt,.research-note{display:flex;align-items:flex-start;gap:9px;background:#f4f8ff;border:1px solid #dce8f8;border-radius:7px;color:#526b88;font-size:11px;line-height:1.5;padding:13px 15px;margin-bottom:20px}.research-note{margin:22px 0 0}.research-note svg{color:var(--blue);flex:none}.research-note strong{display:block;color:var(--navy)}
+.repeater{display:grid;gap:16px;margin-top:8px}.repeat-card{border:1px solid var(--border);border-radius:8px;background:#fbfcfe;padding:18px}.repeat-head{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:16px}.repeat-head h2{font:700 15px Manrope;margin:0;color:var(--navy)}.repeat-head button{border:0;background:transparent;color:#a33;cursor:pointer;padding:5px}.repeat-card .field{margin-bottom:14px}.repeat-card .two{align-items:start}.add-row{display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}
