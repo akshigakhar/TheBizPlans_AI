@@ -1,5 +1,27 @@
 export const EXPENSE_FREQUENCIES = ['Monthly', 'Quarterly', 'Annually', 'One time'] as const;
 
+export const EXPENSE_CATEGORIES = [
+  { value: 'premises', label: 'Premises and Occupancy' },
+  { value: 'utilities', label: 'Utilities' },
+  { value: 'insurance', label: 'Insurance' },
+  { value: 'marketing', label: 'Marketing and Advertising' },
+  { value: 'software_and_technology', label: 'Software and Technology' },
+  { value: 'professional_fees', label: 'Professional Fees' },
+  { value: 'repairs_and_maintenance', label: 'Repairs and Maintenance' },
+  { value: 'office_and_administration', label: 'Office and Administration' },
+  { value: 'travel', label: 'Travel' },
+  { value: 'vehicle', label: 'Vehicle' },
+  { value: 'banking_and_merchant_fees', label: 'Banking and Merchant Fees' },
+  { value: 'licences_and_memberships', label: 'Licences and Memberships' },
+  { value: 'contract_services', label: 'Contract Services' },
+  { value: 'communication', label: 'Telephone and Internet' },
+  { value: 'security_and_cleaning', label: 'Security and Cleaning' },
+  { value: 'taxes_and_permits', label: 'Taxes and Permits' },
+  { value: 'other', label: 'Other' },
+] as const;
+
+export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number]['value'];
+
 export type ExpenseFrequency = typeof EXPENSE_FREQUENCIES[number];
 
 export interface OperatingExpense {
@@ -12,6 +34,24 @@ export interface OperatingExpense {
   endMonth: number;
   annualIncrease: number;
   notes: string;
+}
+
+const legacyCategoryAliases: Record<string, ExpenseCategory> = {
+  Facilities: 'premises',
+  Technology: 'software_and_technology',
+  'Sales & marketing': 'marketing',
+  Other: 'other',
+};
+
+export function normalizeExpenseCategory(category: unknown): ExpenseCategory {
+  const value = String(category || '').trim();
+  if (EXPENSE_CATEGORIES.some(option => option.value === value)) return value as ExpenseCategory;
+  return legacyCategoryAliases[value] || 'other';
+}
+
+export function expenseCategoryLabel(category: unknown): string {
+  const value = normalizeExpenseCategory(category);
+  return EXPENSE_CATEGORIES.find(option => option.value === value)?.label || 'Other';
 }
 
 export interface ExpenseValidationError {
@@ -38,7 +78,7 @@ export function normalizeOperatingExpense(expense: Partial<OperatingExpense>): O
   return {
     id: String(expense.id || ''),
     name: String(expense.name || '').trim(),
-    category: String(expense.category || 'Other').trim() || 'Other',
+    category: normalizeExpenseCategory(expense.category),
     amount: Math.max(0, finiteNumber(expense.amount)),
     frequency: EXPENSE_FREQUENCIES.includes(expense.frequency as ExpenseFrequency)
       ? expense.frequency as ExpenseFrequency

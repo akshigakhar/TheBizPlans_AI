@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   calculateOperatingExpenses,
+  EXPENSE_CATEGORIES,
+  expenseCategoryLabel,
   expenseMonthlySchedule,
   normalizeOperatingExpense,
   validateOperatingExpense,
@@ -56,4 +58,16 @@ test('normalizes imported values without mutating the input', () => {
 test('returns actionable validation errors for invalid records', () => {
   const errors = validateOperatingExpense({ name: '', amount: -1, frequency: 'Weekly' as never, startMonth: 8, endMonth: 2, annualIncrease: -1 });
   assert.deepEqual(new Set(errors.map(error => error.field)), new Set(['name', 'amount', 'frequency', 'endMonth', 'annualIncrease']));
+});
+
+test('provides stable category values with user-friendly labels', () => {
+  assert.equal(EXPENSE_CATEGORIES.length, 17);
+  assert.deepEqual(EXPENSE_CATEGORIES[0], { value: 'premises', label: 'Premises and Occupancy' });
+  assert.equal(expenseCategoryLabel('communication'), 'Telephone and Internet');
+  assert.equal(expenseCategoryLabel('banking_and_merchant_fees'), 'Banking and Merchant Fees');
+});
+
+test('normalizes legacy and unknown categories into the predefined classification list', () => {
+  assert.equal(normalizeOperatingExpense(expense({ category: 'Facilities' })).category, 'premises');
+  assert.equal(normalizeOperatingExpense(expense({ category: 'Custom old value' })).category, 'other');
 });
