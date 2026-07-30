@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowLeft, ArrowRight, BarChart3, Bell, BookOpen, BriefcaseBusiness, Check, ChevronDown, CircleDollarSign, Copy, Download, FileChartColumn, FileSpreadsheet, FileText, LayoutDashboard, Lock, MoreHorizontal, PencilLine, Plus, Search, Settings, Sparkles, Trash2, Users } from 'lucide-react';
 import { annualize, financialAnalysis, loanSchedule, monthlyPayroll, projectFinancials } from './finance.js';
+import { calculateOperatingExpenses, validateOperatingExpense } from './operating-expenses.ts';
 import './styles.css';
 
 const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -193,12 +194,21 @@ function Financials({setView}) {
   const [active,setActive]=useState('revenue');
   const [revenues,setRevenues]=useState([{name:'Creative services',price:85,units:120,growth:4,seasonal:0,annualPriceIncrease:3,directCost:28,paymentTiming:'Due on receipt',refundRate:1}]);
   const [startup,setStartup]=useState({businessPurchase:0,equipment:12000,furniture:3500,renovations:0,leaseholdImprovements:0,inventory:0,deposits:4000,website:2500,software:1200,legalFees:1800,accountingFees:1200,marketing:4500,licensing:600,insurance:1800,vehicle:0,workingCapital:45000,otherCosts:0});
-  const [expenses,setExpenses]=useState({rent:2400,utilities:350,insurance:150,telephone:90,internet:100,software:650,marketing:1200,professionalFees:500,repairs:100,travel:300,vehicle:0,officeExpenses:250,bankCharges:60,merchantFees:240,contractServices:900,miscellaneousExpenses:200});
+  const [expenses,setExpenses]=useState(()=>{
+    const defaults=[
+      {id:'rent',name:'Rent',category:'Facilities',amount:2400,frequency:'Monthly',startMonth:1,endMonth:36,annualIncrease:3,notes:''},
+      {id:'software',name:'Software subscriptions',category:'Technology',amount:650,frequency:'Monthly',startMonth:1,endMonth:36,annualIncrease:0,notes:''},
+      {id:'marketing',name:'Marketing',category:'Sales & marketing',amount:1200,frequency:'Monthly',startMonth:1,endMonth:36,annualIncrease:0,notes:''}
+    ];
+    try { const saved=JSON.parse(localStorage.getItem('thebizplans-operating-expenses')); return Array.isArray(saved)?saved:defaults; } catch { return defaults; }
+  });
   const [staff,setStaff]=useState([{role:'Designer',payType:'Salary',annualSalary:72000,hourlyWage:0,hoursPerWeek:40,payrollTaxes:8,benefits:5,vacationPay:4,employerContributions:2,annualIncrease:3}]);
   const [loan,setLoan]=useState({amount:75000,annualRate:7.5,amortizationYears:5,paymentFrequency:'Monthly',interestOnlyMonths:0,startDate:'2026-08-01'});
   const [tax,setTax]=useState({incomeTaxRate:12,salesTaxRate:8.875,depreciation:'Straight-line over 5 years',openingLosses:0,ownerDraws:3000});
   const updateObject=(setter,key,value)=>setter(current=>({...current,[key]:value}));
-  const operatingExpenses=Object.values(expenses).reduce((sum,value)=>sum+Number(value||0),0);
+  const expenseProjection=useMemo(()=>calculateOperatingExpenses(expenses),[expenses]);
+  const operatingExpenses=expenseProjection.monthly[0]||0;
+  useEffect(()=>{ try { localStorage.setItem('thebizplans-operating-expenses',JSON.stringify(expenses)); } catch { /* Storage may be unavailable. */ } },[expenses]);
   const payroll=staff.reduce((sum,row)=>sum+monthlyPayroll(row),0);
   const openingCash=Number(startup.workingCapital||0);
   const depreciableAssets=Number(startup.equipment||0)+Number(startup.furniture||0)+Number(startup.renovations||0)+Number(startup.leaseholdImprovements||0)+Number(startup.vehicle||0);
@@ -208,13 +218,12 @@ function Financials({setView}) {
   const schedule=useMemo(()=>loanSchedule(loan),[loan]);
   const fieldGrid=(values,setter,fields)=><div className="financial-field-grid">{fields.map(([key,label,suffix])=><Field key={key} label={label+(suffix?` (${suffix})`:'')} value={values[key]} onChange={value=>updateObject(setter,key,value)}/>)}</div>;
   const startupFields=[['businessPurchase','Business purchase','$'],['equipment','Equipment','$'],['furniture','Furniture','$'],['renovations','Renovations','$'],['leaseholdImprovements','Leasehold improvements','$'],['inventory','Inventory','$'],['deposits','Deposits','$'],['website','Website','$'],['software','Software','$'],['legalFees','Legal fees','$'],['accountingFees','Accounting fees','$'],['marketing','Marketing','$'],['licensing','Licensing','$'],['insurance','Insurance','$'],['vehicle','Vehicle','$'],['workingCapital','Working capital','$'],['otherCosts','Other costs','$']];
-  const expenseFields=[['rent','Rent','$ / month'],['utilities','Utilities','$ / month'],['insurance','Insurance','$ / month'],['telephone','Telephone','$ / month'],['internet','Internet','$ / month'],['software','Software','$ / month'],['marketing','Marketing','$ / month'],['professionalFees','Professional fees','$ / month'],['repairs','Repairs','$ / month'],['travel','Travel','$ / month'],['vehicle','Vehicle','$ / month'],['officeExpenses','Office expenses','$ / month'],['bankCharges','Bank charges','$ / month'],['merchantFees','Merchant fees','$ / month'],['contractServices','Contract services','$ / month'],['miscellaneousExpenses','Miscellaneous expenses','$ / month']];
   return <div className="page financial-input-page"><div className="welcome"><div><span className="eyebrow">FINANCIAL INPUTS · 36-MONTH FORECAST</span><h1>Build your financial assumptions</h1><p>Structured inputs stay separate from your narrative questionnaire and update the forecast instantly.</p></div><button className="primary" onClick={()=>setView('review')}>Review information <ArrowRight size={17}/></button></div>
     <div className="finance-workspace"><nav className="finance-section-nav">{sections.map(([id,letter,title,caption])=><button key={id} className={active===id?'active':''} onClick={()=>setActive(id)}><span>{letter}</span><div><strong>{title}</strong><small>{caption}</small></div><ArrowRight size={15}/></button>)}</nav>
       <section className="finance-main"><div className="card financial-form"><div className="financial-form-head"><div><span className="eyebrow">{sections.find(x=>x[0]===active)[1]} · ASSUMPTIONS</span><h2>{sections.find(x=>x[0]===active)[2]}</h2><p>{sections.find(x=>x[0]===active)[3]}</p></div><span className="saved"><Check size={14}/>Saved automatically</span></div>
         {active==='revenue'&&<><div className="formula-callout"><b>Monthly revenue</b><span>Units sold × Selling price × Monthly ramp-up × Seasonal factor</span></div><div className="repeater">{revenues.map((row,index)=><div className="repeat-card" key={index}><div className="repeat-head"><h2>Revenue stream {index+1}</h2>{revenues.length>1&&<button onClick={()=>setRevenues(revenues.filter((_,i)=>i!==index))}><Trash2 size={16}/></button>}</div><div className="financial-field-grid"><Field label="Revenue stream name" value={row.name} onChange={value=>setRevenues(revenues.map((item,i)=>i===index?{...item,name:value}:item))}/>{[['price','Selling price ($)'],['units','Expected units in Month 1'],['growth','Monthly growth (%)'],['seasonal','Seasonal variation (%)'],['annualPriceIncrease','Annual price increase (%)'],['directCost','Direct cost percentage (%)'],['paymentTiming','Payment timing'],['refundRate','Refund or cancellation rate (%)']].map(([key,label])=><Field key={key} label={label} value={row[key]} onChange={value=>setRevenues(revenues.map((item,i)=>i===index?{...item,[key]:value}:item))}/>)}</div></div>)}</div><button className="add-row" onClick={()=>setRevenues([...revenues,{name:'New revenue stream',price:0,units:0,growth:0,seasonal:0,annualPriceIncrease:0,directCost:0,paymentTiming:'Due on receipt',refundRate:0}])}><Plus size={16}/>Add revenue stream</button></>}
         {active==='startup'&&<>{fieldGrid(startup,setStartup,startupFields)}<FinancialTotal label="Total startup or project costs" value={Object.values(startup).reduce((s,v)=>s+Number(v||0),0)}/></>}
-        {active==='expenses'&&<><div className="period-note">Enter monthly amounts. Convert annual expenses to a monthly equivalent before entering them.</div>{fieldGrid(expenses,setExpenses,expenseFields)}<FinancialTotal label="Total monthly operating expenses" value={operatingExpenses}/></>}
+        {active==='expenses'&&<OperatingExpenses expenses={expenses} setExpenses={setExpenses} projection={expenseProjection}/>}
         {active==='payroll'&&<><div className="formula-callout"><b>Monthly payroll</b><span>Hourly wage × hours/week × 52 ÷ 12 &nbsp; or &nbsp; Annual salary ÷ 12</span></div>{staff.map((row,index)=><div className="repeat-card payroll-card" key={index}><div className="repeat-head"><h2>Staffing record {index+1}</h2>{staff.length>1&&<button onClick={()=>setStaff(staff.filter((_,i)=>i!==index))}><Trash2 size={16}/></button>}</div><div className="financial-field-grid"><Field label="Role or employee" value={row.role} onChange={v=>setStaff(staff.map((x,i)=>i===index?{...x,role:v}:x))}/><Select label="Pay type" value={row.payType} options={['Salary','Hourly']} onChange={v=>setStaff(staff.map((x,i)=>i===index?{...x,payType:v}:x))}/>{(row.payType==='Salary'?[['annualSalary','Annual salary ($)']]:[['hourlyWage','Hourly wage ($)'],['hoursPerWeek','Hours per week']]).concat([['payrollTaxes','Payroll taxes (%)'],['benefits','Benefits (%)'],['vacationPay','Vacation pay (%)'],['employerContributions','Employer contributions (%)'],['annualIncrease','Annual salary increase (%)']]).map(([key,label])=><Field key={key} label={label} value={row[key]} onChange={v=>setStaff(staff.map((x,i)=>i===index?{...x,[key]:v}:x))}/>)}</div><div className="record-total"><span>Calculated monthly payroll</span><strong>{money(monthlyPayroll(row))}</strong></div></div>)}<button className="add-row" onClick={()=>setStaff([...staff,{role:'New position',payType:'Hourly',hourlyWage:20,hoursPerWeek:40,annualSalary:0,payrollTaxes:8,benefits:0,vacationPay:4,employerContributions:2,annualIncrease:3}])}><Plus size={16}/>Add staffing record</button><FinancialTotal label="Total monthly payroll" value={payroll}/></>}
         {active==='loan'&&<><div className="financial-field-grid">{[['amount','Loan amount ($)'],['annualRate','Interest rate (%)'],['amortizationYears','Amortization period (years)'],['paymentFrequency','Payment frequency'],['interestOnlyMonths','Interest-only period (months)'],['startDate','Start date']].map(([key,label])=><Field key={key} label={label} value={loan[key]} onChange={v=>updateObject(setLoan,key,v)}/>)}</div><div className="loan-summary"><div><span>Monthly payment</span><strong>{money(schedule[0]?.payment||0)}</strong></div><div><span>Month 1 principal</span><strong>{money(schedule[0]?.principal||0)}</strong></div><div><span>Month 1 interest</span><strong>{money(schedule[0]?.interest||0)}</strong></div><div><span>Closing balance</span><strong>{money(schedule[0]?.closingBalance||0)}</strong></div></div></>}
         {active==='tax'&&<>{fieldGrid(tax,setTax,[['incomeTaxRate','Corporate income-tax rate','%'],['salesTaxRate','Sales-tax rate, where applicable','%'],['depreciation','Depreciation assumption'],['openingLosses','Opening losses','$'],['ownerDraws','Dividend or owner-draw assumptions','$ / month']])}</>}
@@ -222,6 +231,34 @@ function Financials({setView}) {
       </div>
       <div className="metrics finance-metrics"><Metric label="Year 1 revenue" value={money(years[0].revenue)} trend="Live forecast"/><Metric label="Year 1 gross margin" value={(years[0].revenue?years[0].grossProfit/years[0].revenue*100:0).toFixed(1)+'%'} trend="After direct costs"/><Metric label="Break-even" value={months.find(x=>x.ebitda>0)?.month?'Month '+months.find(x=>x.ebitda>0).month:'Not reached'} trend="Operating basis"/></div></section>
     </div>
+  </div>;
+}
+
+function OperatingExpenses({expenses,setExpenses,projection}) {
+  const updateExpense=(id,key,value)=>setExpenses(current=>current.map(item=>item.id===id?{...item,[key]:value}:item));
+  const addExpense=()=>setExpenses(current=>[...current,{id:`expense-${Date.now()}`,name:'',category:'Other',amount:0,frequency:'Monthly',startMonth:1,endMonth:36,annualIncrease:0,notes:''}]);
+  const removeExpense=id=>setExpenses(current=>current.filter(item=>item.id!==id));
+  return <div className="operating-expenses">
+    <div className="period-note"><b>Schedule expenses as they are paid.</b> Amount is the cost of each payment. Quarterly and annual expenses appear only in their scheduled months; increases apply every 12 months from the start month.</div>
+    {expenses.length===0?<div className="expense-empty"><CircleDollarSign size={27}/><h3>No operating expenses yet</h3><p>Add any ongoing or scheduled overhead cost for this business.</p><button className="primary" onClick={addExpense}><Plus size={16}/>Add expense</button></div>:<div className="expense-list">{expenses.map((expense,index)=>{
+      const errors=validateOperatingExpense(expense);
+      return <section className="expense-card" key={expense.id}>
+        <div className="expense-card-head"><div><span>EXPENSE {index+1}</span><strong>{expense.name||'Untitled expense'}</strong></div><button aria-label={`Delete ${expense.name||`expense ${index+1}`}`} title="Delete expense" onClick={()=>removeExpense(expense.id)}><Trash2 size={16}/></button></div>
+        <div className="expense-fields">
+          <Field label="Expense name" value={expense.name} placeholder="e.g. Rent, insurance or storage" onChange={v=>updateExpense(expense.id,'name',v)}/>
+          <Field label="Category" value={expense.category} placeholder="e.g. Facilities" onChange={v=>updateExpense(expense.id,'category',v)}/>
+          <Field label="Amount per payment ($)" value={expense.amount} onChange={v=>updateExpense(expense.id,'amount',v)}/>
+          <Select label="Frequency" value={expense.frequency} options={['Monthly','Quarterly','Annually','One time']} onChange={v=>updateExpense(expense.id,'frequency',v)}/>
+          <Field label="Start month (1–36)" value={expense.startMonth} onChange={v=>updateExpense(expense.id,'startMonth',v)}/>
+          <Field label="End month (1–36)" value={expense.endMonth} onChange={v=>updateExpense(expense.id,'endMonth',v)}/>
+          <Field label="Annual increase (%)" value={expense.annualIncrease} onChange={v=>updateExpense(expense.id,'annualIncrease',v)}/>
+          <Field label="Notes (optional)" value={expense.notes} placeholder="Contract, vendor or assumption" onChange={v=>updateExpense(expense.id,'notes',v)}/>
+        </div>
+        {errors.length>0&&<div className="expense-errors" role="alert">{errors.map(error=><span key={`${error.field}-${error.message}`}>{error.message}</span>)}</div>}
+      </section>;
+    })}</div>}
+    {expenses.length>0&&<button className="secondary add-expense" onClick={addExpense}><Plus size={16}/>Add operating expense</button>}
+    <div className="expense-summary"><div><span>Month 1</span><strong>{money(projection.monthly[0]||0)}</strong></div><div><span>Year 1 total</span><strong>{money(projection.yearOne)}</strong></div><div><span>36-month total</span><strong>{money(projection.threeYear)}</strong></div></div>
   </div>;
 }
 function FinancialTotal({label,value}){return <div className="financial-total"><span>{label}</span><strong>{money(value)}</strong></div>}
