@@ -79,3 +79,23 @@ test('calculates revenue-based expenses from the monthly revenue forecast', () =
   assert.deepEqual(result.monthly, [50, 100, 150]);
   assert.equal(result.yearOne, 300);
 });
+
+test('supports semi-annual payments and open-ended active periods', () => {
+  const schedule = expenseMonthlySchedule(expense({ frequency: 'Semi-Annual', endMonth: null }), 14);
+  assert.deepEqual(schedule.map((value, index) => value ? index + 1 : 0).filter(Boolean), [1, 7, 13]);
+});
+
+test('validates percentage rates and selected revenue streams', () => {
+  const errors = validateOperatingExpense(expense({ category: 'premises', calculationType: 'Percentage of Revenue', amount: 101, revenueBasis: 'selected_revenue_streams', revenueStreamIds: [] }));
+  assert.deepEqual(new Set(errors.map(error => error.field)), new Set(['amount', 'revenueStreamIds']));
+});
+
+test('calculates percentage expenses from selected streams only', () => {
+  const result = calculateOperatingExpenses([
+    expense({ calculationType: 'Percentage of Revenue', amount: 10, revenueBasis: 'selected_revenue_streams', revenueStreamIds: ['consulting'] }),
+  ], 2, [1000, 1000], [
+    { id: 'consulting', monthly: [200, 300] },
+    { id: 'products', monthly: [800, 700] },
+  ]);
+  assert.deepEqual(result.monthly, [20, 30]);
+});
