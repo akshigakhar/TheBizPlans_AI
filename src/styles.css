@@ -24,3 +24,6 @@
 .plan-actions .delete-action:hover{color:#bd2c2c;background:#fff1f1;border-color:#f2cccc}
 @media(max-width:1200px){.plans .tr{grid-template-columns:minmax(210px,1.5fr) .8fr 1fr minmax(250px,1.2fr)}.plans .tr>*:nth-child(4){display:none}}
 @media(max-width:700px){.plans .tr{grid-template-columns:1fr}.plans .tr>*:not(:first-child),.plans .tr.labels{display:none}}
+
+/* New plan setup context */
+.context-note{display:flex;align-items:flex-start;gap:10px;margin-top:20px;padding:13px 15px;border-radius:7px;background:#f4f8ff;color:#526b88;font-size:11px;line-height:1.45}.context-note svg{color:var(--blue);flex:none}.context-note strong{display:block;color:var(--navy);margin-bottom:2px}
