@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowLeft, ArrowRight, BarChart3, Bell, BookOpen, BriefcaseBusiness, Check, ChevronDown, CircleDollarSign, Copy, Download, FileChartColumn, FileSpreadsheet, FileText, LayoutDashboard, Lock, MoreHorizontal, PencilLine, Plus, Search, Settings, Sparkles, Trash2, Users, X } from 'lucide-react';
 import { annualize, financialAnalysis, loanSchedule, monthlyPayroll, projectFinancials } from './finance.js';
-import { calculateOperatingExpenses, validateOperatingExpense } from './operating-expenses.ts';
+import { calculateOperatingExpenses, EXPENSE_CATEGORIES, expenseCategoryLabel, normalizeOperatingExpense, validateOperatingExpense } from './operating-expenses.ts';
 import './styles.css';
 
 const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -145,7 +145,7 @@ function Setup({form,update,onCancel,onCreate}) {
   </div>
 }
 function Field({label,value,onChange,wide,area,placeholder}){return <div className={(wide?'wide ':'')+'field'}><label>{label}</label>{area?<textarea value={value} placeholder={placeholder} onChange={e=>onChange(e.target.value)}/>:<input value={value} placeholder={placeholder} onChange={e=>onChange(e.target.value)}/>}</div>}
-function Select({label,value,options,onChange}){return <div className="field"><label>{label}</label><select value={value} onChange={e=>onChange(e.target.value)}>{options.map(x=><option key={x}>{x}</option>)}</select></div>}
+function Select({label,value,options,onChange}){return <div className="field"><label>{label}</label><select value={value} onChange={e=>onChange(e.target.value)}>{options.map(option=>{const item=typeof option==='string'?{value:option,label:option}:option;return <option key={item.value} value={item.value}>{item.label}</option>})}</select></div>}
 
 function Builder({form,update,activeStep,setActiveStep,setView}) { return <div className="builder"><div className="builder-head"><div><button className="back" onClick={()=>setView('dashboard')}><ArrowLeft size={16}/>Dashboard</button><h1>{form.planName}</h1><p>Questionnaire · <b>{Math.round((activeStep+1)/steps.length*100)}% complete</b></p></div><div><span className="saved"><Check size={14}/>All changes saved</span></div></div><div className="builder-layout"><section className="step-list"><div className="completion"><div><b>Questionnaire</b><strong>{Math.round((activeStep+1)/steps.length*100)}%</strong></div><div className="progress"><i style={{width:(activeStep+1)/steps.length*100+'%'}}/></div></div>{steps.map((s,i)=><button className={i===activeStep?'active':i<activeStep?'done':''} onClick={()=>setActiveStep(i)} key={s}><span>{i<activeStep?<Check size={14}/>:i+1}</span>{s}</button>)}</section><section className="card question-card"><span className="eyebrow">SECTION {activeStep+1} OF {steps.length}</span><h1>{steps[activeStep]}</h1><p className="intro">Help us understand your business in your own words. We’ll use only the facts you provide.</p><QuestionnaireStep step={activeStep} form={form} update={update}/><div className="question-actions"><button className="secondary" disabled={activeStep===0} onClick={()=>setActiveStep(x=>x-1)}><ArrowLeft size={17}/>Previous</button><span>Autosaved just now</span><button className="primary" onClick={()=>{if(activeStep<steps.length-1)setActiveStep(x=>x+1);else setView('financials')}}>{activeStep===steps.length-1?'Continue to financials':'Save & continue'} <ArrowRight size={17}/></button></div></section></div></div> }
 
@@ -192,11 +192,11 @@ function Financials({setView}) {
   const [startup,setStartup]=useState({businessPurchase:0,equipment:12000,furniture:3500,renovations:0,leaseholdImprovements:0,inventory:0,deposits:4000,website:2500,software:1200,legalFees:1800,accountingFees:1200,marketing:4500,licensing:600,insurance:1800,vehicle:0,workingCapital:45000,otherCosts:0});
   const [expenses,setExpenses]=useState(()=>{
     const defaults=[
-      {id:'rent',name:'Rent',category:'Facilities',amount:2400,frequency:'Monthly',startMonth:1,endMonth:36,annualIncrease:3,notes:''},
-      {id:'software',name:'Software subscriptions',category:'Technology',amount:650,frequency:'Monthly',startMonth:1,endMonth:36,annualIncrease:0,notes:''},
-      {id:'marketing',name:'Marketing',category:'Sales & marketing',amount:1200,frequency:'Monthly',startMonth:1,endMonth:36,annualIncrease:0,notes:''}
+      {id:'rent',name:'Rent',category:'premises',amount:2400,frequency:'Monthly',startMonth:1,endMonth:36,annualIncrease:3,notes:''},
+      {id:'software',name:'Software subscriptions',category:'software_and_technology',amount:650,frequency:'Monthly',startMonth:1,endMonth:36,annualIncrease:0,notes:''},
+      {id:'marketing',name:'Marketing',category:'marketing',amount:1200,frequency:'Monthly',startMonth:1,endMonth:36,annualIncrease:0,notes:''}
     ];
-    try { const saved=JSON.parse(localStorage.getItem('thebizplans-operating-expenses')); return Array.isArray(saved)?saved:defaults; } catch { return defaults; }
+    try { const saved=JSON.parse(localStorage.getItem('thebizplans-operating-expenses')); return Array.isArray(saved)?saved.map(normalizeOperatingExpense):defaults; } catch { return defaults; }
   });
   const [staff,setStaff]=useState([{role:'Designer',payType:'Salary',annualSalary:72000,hourlyWage:0,hoursPerWeek:40,payrollTaxes:8,benefits:5,vacationPay:4,employerContributions:2,annualIncrease:3}]);
   const [loan,setLoan]=useState({amount:75000,annualRate:7.5,amortizationYears:5,paymentFrequency:'Monthly',interestOnlyMonths:0,startDate:'2026-08-01'});
@@ -231,7 +231,7 @@ function Financials({setView}) {
 }
 
 function OperatingExpenses({expenses,setExpenses,projection,onPrevious}) {
-  const emptyExpense=()=>({id:`expense-${Date.now()}`,name:'',category:'Other',amount:0,frequency:'Monthly',startMonth:1,endMonth:36,annualIncrease:0,notes:''});
+  const emptyExpense=()=>({id:`expense-${Date.now()}`,name:'',category:'other',amount:0,frequency:'Monthly',startMonth:1,endMonth:36,annualIncrease:0,notes:''});
   const [editing,setEditing]=useState(null);
   const openNew=()=>setEditing(emptyExpense());
   const openEdit=expense=>setEditing({...expense});
@@ -249,7 +249,7 @@ function OperatingExpenses({expenses,setExpenses,projection,onPrevious}) {
     <div className="expense-table-wrap"><table className="expense-table">
       <thead><tr><th>Expense</th><th>Category</th><th>Amount</th><th>Frequency</th><th>Active period</th><th><span className="sr-only">Actions</span></th></tr></thead>
       <tbody>{expenses.length===0?<tr><td colSpan="6"><div className="expense-empty"><CircleDollarSign size={27}/><h3>No operating expenses yet</h3><p>Add an ongoing or scheduled overhead cost for this business.</p><button className="primary" onClick={openNew}><Plus size={16}/>Add expense</button></div></td></tr>:expenses.map(expense=><tr key={expense.id}>
-        <td><strong>{expense.name}</strong>{expense.notes&&<small>{expense.notes}</small>}</td><td>{expense.category}</td><td>{money(Number(expense.amount||0))}</td><td>{expense.frequency}</td><td>Month {expense.startMonth}–{expense.endMonth}</td><td><div className="expense-actions"><button aria-label={`Edit ${expense.name}`} onClick={()=>openEdit(expense)}><PencilLine size={15}/></button><button aria-label={`Delete ${expense.name}`} onClick={()=>removeExpense(expense.id)}><Trash2 size={15}/></button></div></td>
+        <td><strong>{expense.name}</strong>{expense.notes&&<small>{expense.notes}</small>}</td><td>{expenseCategoryLabel(expense.category)}</td><td>{money(Number(expense.amount||0))}</td><td>{expense.frequency}</td><td>Month {expense.startMonth}–{expense.endMonth}</td><td><div className="expense-actions"><button aria-label={`Edit ${expense.name}`} onClick={()=>openEdit(expense)}><PencilLine size={15}/></button><button aria-label={`Delete ${expense.name}`} onClick={()=>removeExpense(expense.id)}><Trash2 size={15}/></button></div></td>
       </tr>)}</tbody>
     </table></div>
     <section className="expense-summary" aria-label="Operating expense summary"><div><span>Month 1</span><strong>{money(projection.monthly[0]||0)}</strong></div><div><span>Year 1 total</span><strong>{money(projection.yearOne)}</strong></div><div><span>36-month total</span><strong>{money(projection.threeYear)}</strong></div></section>
@@ -258,7 +258,7 @@ function OperatingExpenses({expenses,setExpenses,projection,onPrevious}) {
       <div className="expense-modal-head"><div><span className="eyebrow">OPERATING EXPENSE</span><h3 id="expense-form-title">{expenses.some(item=>item.id===editing.id)?'Edit expense':'Add an expense'}</h3><p>Enter the payment details used in your forecast.</p></div><button aria-label="Close expense form" onClick={()=>setEditing(null)}><X size={19}/></button></div>
       <div className="expense-form-grid">
         <Field label="Expense name" value={editing.name} placeholder="e.g. Rent or insurance" onChange={value=>setEditing({...editing,name:value})}/>
-        <Field label="Category" value={editing.category} placeholder="e.g. Facilities" onChange={value=>setEditing({...editing,category:value})}/>
+        <Select label="Category" value={editing.category} options={EXPENSE_CATEGORIES} onChange={value=>setEditing({...editing,category:value})}/>
         <Field label="Amount per payment ($)" value={editing.amount} onChange={value=>setEditing({...editing,amount:value})}/>
         <Select label="Frequency" value={editing.frequency} options={['Monthly','Quarterly','Annually','One time']} onChange={value=>setEditing({...editing,frequency:value})}/>
         <Field label="Start month (1–36)" value={editing.startMonth} onChange={value=>setEditing({...editing,startMonth:value})}/>
