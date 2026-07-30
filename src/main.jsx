@@ -19,7 +19,7 @@ function App() {
   const [activeStep, setActiveStep] = useState(0);
   const [plans, setPlans] = useState(initialPlans);
   const [toast, setToast] = useState('');
-  const [form, setForm] = useState({ planName: 'Acme Studio — Growth Plan', businessName: 'Acme Creative Studio', country: 'United States', region: 'New York', city: 'Brooklyn', stage: 'Expansion', purpose: 'Bank or lender', currency: 'USD', description: 'A strategy and design studio helping growing organizations build clear brands and effective digital experiences.', problem: 'Growing businesses often lack consistent brand direction and an experienced, flexible creative team.', difference: 'Senior-level expertise, a focused process, and flexible project or retainer engagements.', shortGoals: 'Build recurring client revenue and hire a full-time designer.', longGoals: 'Become the trusted creative partner for growth-stage organizations across the United States.' });
+  const [form, setForm] = useState({ planName: 'Acme Studio — Growth Plan', businessName: 'Acme Creative Studio', country: 'United States', region: 'New York', city: 'Brooklyn', stage: 'Expansion', purpose: 'Bank or lender', projectionPeriod: '3 years (36 months)', currency: 'USD', description: 'A strategy and design studio helping growing organizations build clear brands and effective digital experiences.', problem: 'Growing businesses often lack consistent brand direction and an experienced, flexible creative team.', difference: 'Senior-level expertise, a focused process, and flexible project or retainer engagements.', shortGoals: 'Build recurring client revenue and hire a full-time designer.', longGoals: 'Become the trusted creative partner for growth-stage organizations across the United States.' });
   const update = (key, value) => setForm(f => ({ ...f, [key]: value }));
   const notify = msg => { setToast(msg); setTimeout(() => setToast(''), 2400); };
   const createPlan = () => { setPlans(p => [{ id: Date.now(), name: form.planName || 'Untitled business plan', company: form.businessName || 'New business', stage: 'Draft', progress: 9, updated: 'Just now' }, ...p]); setView('builder'); };
@@ -101,7 +101,48 @@ function Dashboard({plans,setPlans,onCreate,setView,notify}) {
   </div> }
 function Stat({icon:Icon,value,label,tone}){return <div className="stat card"><div className={'stat-icon '+tone}><Icon/></div><div><strong>{value}</strong><span>{label}</span></div></div>}
 
-function Setup({form,update,onCancel,onCreate}) { return <div className="page narrow"><button className="back" onClick={onCancel}><ArrowLeft size={17}/>Back to dashboard</button><div className="title-block"><span className="eyebrow">CREATE A PLAN</span><h1>Tell us about your plan</h1><p>Start with the basics. You can change these details at any time.</p></div><section className="card form-card"><div className="form-title"><div className="number">1</div><div><h2>Plan details</h2><p>Give your plan a name and tell us where the business operates.</p></div></div><div className="form-grid"><Field label="Plan name" value={form.planName} onChange={v=>update('planName',v)} wide/><Field label="Business name" value={form.businessName} onChange={v=>update('businessName',v)} wide/><Select label="Country" value={form.country} options={['United States','Canada','United Kingdom','Australia']} onChange={v=>update('country',v)}/><Field label="Province or state" value={form.region} onChange={v=>update('region',v)}/><Field label="City" value={form.city} onChange={v=>update('city',v)}/><Select label="Currency" value={form.currency} options={['USD','CAD','GBP','AUD']} onChange={v=>update('currency',v)}/></div><hr/><div className="form-title"><div className="number">2</div><div><h2>Plan context</h2><p>This helps us tailor the language—not the structure.</p></div></div><label>Business stage</label><div className="choice-grid">{['Startup','Existing business','Business acquisition','Expansion'].map(x=><button className={form.stage===x?'selected':''} onClick={()=>update('stage',x)} key={x}><BriefcaseBusiness size={20}/><strong>{x}</strong><small>{x==='Startup'?'A new business preparing to launch':x==='Expansion'?'Growing an established business':'An operating or acquired business'}</small></button>)}</div><div className="form-grid spaced"><Select label="Business-plan purpose" value={form.purpose} options={['Bank or lender','Investor','Internal planning','General use']} onChange={v=>update('purpose',v)}/><Select label="Projection period" value="3 years (36 months)" options={['3 years (36 months)']} onChange={()=>{}}/></div><div className="form-actions"><button className="secondary" onClick={onCancel}>Cancel</button><button className="primary" onClick={onCreate}>Create plan <ArrowRight size={17}/></button></div></section></div> }
+function Setup({form,update,onCancel,onCreate}) {
+  const stageOptions = ['Startup', 'Existing business', 'Business acquisition', 'Expansion'];
+  const stageDescriptions = {
+    'Startup': 'A new business preparing to launch',
+    'Existing business': 'An established business in operation',
+    'Business acquisition': 'A business you plan to purchase',
+    'Expansion': 'An established business preparing to grow'
+  };
+  const contextCopy = form.purpose === 'Bank or lender'
+    ? 'We’ll use lender-friendly wording and emphasize repayment readiness.'
+    : form.purpose === 'Investor'
+      ? 'We’ll emphasize the opportunity, growth case, and expected returns.'
+      : form.purpose === 'Internal planning'
+        ? 'We’ll keep the language practical and focused on execution.'
+        : 'We’ll use clear, balanced language for a general audience.';
+
+  return <div className="page narrow">
+    <button className="back" onClick={onCancel}><ArrowLeft size={17}/>Back to dashboard</button>
+    <div className="title-block"><span className="eyebrow">CREATE A PLAN</span><h1>Set up your new plan</h1><p>Just the essentials. You can change these details at any time.</p></div>
+    <section className="card form-card">
+      <div className="form-title"><div className="number">1</div><div><h2>Plan details</h2><p>Name the plan and tell us where the business operates.</p></div></div>
+      <div className="form-grid">
+        <Field label="Plan name" value={form.planName} onChange={v=>update('planName',v)} wide/>
+        <Field label="Business name" value={form.businessName} onChange={v=>update('businessName',v)} wide/>
+        <Select label="Country" value={form.country} options={['United States','Canada','United Kingdom','Australia']} onChange={v=>update('country',v)}/>
+        <Field label="Province or state" value={form.region} onChange={v=>update('region',v)}/>
+        <Field label="City" value={form.city} onChange={v=>update('city',v)}/>
+      </div>
+      <hr/>
+      <div className="form-title"><div className="number">2</div><div><h2>Plan context</h2><p>Your choices tailor the wording, while every plan follows the same proven system.</p></div></div>
+      <label>Business stage</label>
+      <div className="choice-grid">{stageOptions.map(stage=><button type="button" className={form.stage===stage?'selected':''} onClick={()=>update('stage',stage)} key={stage}><BriefcaseBusiness size={20}/><strong>{stage}</strong><small>{stageDescriptions[stage]}</small></button>)}</div>
+      <div className="form-grid spaced">
+        <Select label="Business-plan purpose" value={form.purpose} options={['Bank or lender','Investor','Internal planning','General use']} onChange={v=>update('purpose',v)}/>
+        <Select label="Projection period" value={form.projectionPeriod} options={['1 year (12 months)','3 years (36 months)','5 years (60 months)']} onChange={v=>update('projectionPeriod',v)}/>
+        <Select label="Currency" value={form.currency} options={['USD','CAD','GBP','AUD']} onChange={v=>update('currency',v)}/>
+      </div>
+      <div className="context-note"><Sparkles size={16}/><span><strong>One planning system</strong>{contextCopy}</span></div>
+      <div className="form-actions"><button className="secondary" onClick={onCancel}>Cancel</button><button className="primary" onClick={onCreate}>Create plan <ArrowRight size={17}/></button></div>
+    </section>
+  </div>
+}
 function Field({label,value,onChange,wide,area,placeholder}){return <div className={(wide?'wide ':'')+'field'}><label>{label}</label>{area?<textarea value={value} placeholder={placeholder} onChange={e=>onChange(e.target.value)}/>:<input value={value} placeholder={placeholder} onChange={e=>onChange(e.target.value)}/>}</div>}
 function Select({label,value,options,onChange}){return <div className="field"><label>{label}</label><select value={value} onChange={e=>onChange(e.target.value)}>{options.map(x=><option key={x}>{x}</option>)}</select></div>}
 
