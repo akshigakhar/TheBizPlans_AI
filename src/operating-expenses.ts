@@ -34,6 +34,7 @@ export interface OperatingExpense {
   endMonth: number;
   annualIncrease: number;
   notes: string;
+  calculationType?: 'Fixed amount' | 'Percent of revenue';
 }
 
 const legacyCategoryAliases: Record<string, ExpenseCategory> = {
@@ -87,6 +88,7 @@ export function normalizeOperatingExpense(expense: Partial<OperatingExpense>): O
     endMonth: Math.max(startMonth, wholeMonth(expense.endMonth, 36)),
     annualIncrease: Math.max(0, finiteNumber(expense.annualIncrease)),
     notes: String(expense.notes || '').trim(),
+    calculationType: expense.calculationType === 'Percent of revenue' ? 'Percent of revenue' : 'Fixed amount',
   };
 }
 
@@ -117,9 +119,11 @@ export function expenseMonthlySchedule(expense: Partial<OperatingExpense>, proje
   });
 }
 
-export function calculateOperatingExpenses(expenses: Partial<OperatingExpense>[], projectionMonths = 36): OperatingExpenseProjection {
+export function calculateOperatingExpenses(expenses: Partial<OperatingExpense>[], projectionMonths = 36, revenueMonthly: number[] = []): OperatingExpenseProjection {
   const monthly = Array.from({ length: Math.max(0, Math.trunc(projectionMonths)) }, () => 0);
-  expenses.forEach(expense => expenseMonthlySchedule(expense, projectionMonths).forEach((amount, index) => { monthly[index] += amount; }));
+  expenses.forEach(expense => expenseMonthlySchedule(expense, projectionMonths).forEach((amount, index) => {
+    monthly[index] += expense.calculationType === 'Percent of revenue' ? (revenueMonthly[index] || 0) * amount / 100 : amount;
+  }));
   return {
     monthly,
     yearOne: monthly.slice(0, 12).reduce((sum, amount) => sum + amount, 0),

@@ -71,3 +71,11 @@ test('normalizes legacy and unknown categories into the predefined classificatio
   assert.equal(normalizeOperatingExpense(expense({ category: 'Facilities' })).category, 'premises');
   assert.equal(normalizeOperatingExpense(expense({ category: 'Custom old value' })).category, 'other');
 });
+
+test('calculates revenue-based expenses from the monthly revenue forecast', () => {
+  const result = calculateOperatingExpenses([
+    expense({ amount: 5, calculationType: 'Percent of revenue' }),
+  ], 3, [1000, 2000, 3000]);
+  assert.deepEqual(result.monthly, [50, 100, 150]);
+  assert.equal(result.yearOne, 300);
+});
