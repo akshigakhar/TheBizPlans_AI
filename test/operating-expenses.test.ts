@@ -99,3 +99,31 @@ test('calculates percentage expenses from selected streams only', () => {
   ]);
   assert.deepEqual(result.monthly, [20, 30]);
 });
+
+test('returns reconciled fixed, revenue, annual, record, and category summaries', () => {
+  const result = calculateOperatingExpenses([
+    expense({ category: 'premises', amount: 100 }),
+    expense({ id: 'expense-2', name: 'Fees', category: 'banking_and_merchant_fees', calculationType: 'Percentage of Revenue', amount: 10 }),
+  ], 24, Array(24).fill(1000));
+  assert.equal(result.totalFixedExpenses, 2400);
+  assert.equal(result.totalRevenueBasedExpenses, 2400);
+  assert.equal(result.totalOperatingExpenses, 4800);
+  assert.equal(result.expenseResults.length, 2);
+  assert.deepEqual(result.annualSummaries.map(year => year.totalOperatingExpenses), [2400, 2400]);
+  assert.equal(result.categorySummaries.premises, 2400);
+  assert.equal(result.categorySummaries.banking_and_merchant_fees, 2400);
+  assert.deepEqual(result.monthly, result.fixedExpensesByMonth.map((fixed, index) => fixed + result.revenueBasedExpensesByMonth[index]));
+});
+
+test('keeps percentage rates constant when a fixed annual increase is present', () => {
+  const result = calculateOperatingExpenses([
+    expense({ calculationType: 'Percentage of Revenue', amount: 5, annualIncrease: 50 }),
+  ], 24, Array(24).fill(1000));
+  assert.equal(result.monthly[0], 50);
+  assert.equal(result.monthly[12], 50);
+});
+
+test('rejects excessive annual increases and overlong notes', () => {
+  const errors = validateOperatingExpense(expense({ category: 'premises', annualIncrease: 101, notes: 'x'.repeat(2001) }));
+  assert.deepEqual(new Set(errors.map(error => error.field)), new Set(['annualIncrease', 'notes']));
+});

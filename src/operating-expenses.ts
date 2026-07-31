@@ -32,7 +32,24 @@ export function expenseCategoryLabel(category: unknown): string {
 
 export interface ExpenseValidationError { field: keyof OperatingExpense; message: string }
 export interface RevenueStreamForecast { id: string; monthly: number[] }
-export interface OperatingExpenseProjection { monthly: number[]; yearOne: number; threeYear: number }
+export interface OperatingExpenseMonthlyResult {
+  monthIndex: number; expenseId: string; expenseName: string; category: string;
+  fixedAmount: number; revenueBasedAmount: number; totalAmount: number;
+}
+export interface OperatingExpenseAnnualSummary {
+  year: number; fixedExpenses: number; revenueBasedExpenses: number; totalOperatingExpenses: number;
+}
+export interface OperatingExpenseResult { expense: OperatingExpense; monthly: number[]; annualTotals: number[]; projectionTotal: number }
+export interface OperatingExpenseProjection {
+  /** Precise values are accumulated without intermediate rounding; formatters round only for display. */
+  monthly: number[]; yearOne: number; threeYear: number;
+  monthlyResults: OperatingExpenseMonthlyResult[];
+  expenseResults: OperatingExpenseResult[];
+  fixedExpensesByMonth: number[]; revenueBasedExpensesByMonth: number[];
+  annualSummaries: OperatingExpenseAnnualSummary[];
+  categorySummaries: Readonly<Record<string, number>>;
+  totalFixedExpenses: number; totalRevenueBasedExpenses: number; totalOperatingExpenses: number;
+}
 
 const number = (value: unknown): number => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
 const month = (value: unknown, fallback: number): number => Math.min(36, Math.max(1, Math.trunc(number(value) || fallback)));
@@ -74,7 +91,8 @@ export function validateOperatingExpense(expense: Partial<OperatingExpense> & Re
   if (!Number.isInteger(start) || start < 1 || start > 36) errors.push({ field: 'startMonth', message: 'Choose a valid start month.' });
   if (end !== null && (!Number.isInteger(end) || end < 1 || end > 36)) errors.push({ field: 'endMonth', message: 'Choose a valid end month.' });
   if (end !== null && Number.isFinite(start) && end < start) errors.push({ field: 'endMonth', message: 'End month cannot be before the start month.' });
-  if (!Number.isFinite(Number(expense.annualIncrease)) || Number(expense.annualIncrease) < 0) errors.push({ field: 'annualIncrease', message: 'Annual increase must be zero or more.' });
+  if (!Number.isFinite(Number(expense.annualIncrease)) || Number(expense.annualIncrease) < 0 || Number(expense.annualIncrease) > 100) errors.push({ field: 'annualIncrease', message: 'Annual increase must be between 0 and 100.' });
+  if (String(expense.notes || '').length > 2000) errors.push({ field: 'notes', message: 'Notes must be 2,000 characters or fewer.' });
   return errors;
 }
 
@@ -89,19 +107,57 @@ export function expenseMonthlySchedule(expense: Partial<OperatingExpense> & Reco
   });
 }
 
+export const calculateOperatingExpenseMonthlyAmounts = expenseMonthlySchedule;
+
+export function summarizeOperatingExpensesByYear(monthlyResults: readonly OperatingExpenseMonthlyResult[], projectionMonths?: number): OperatingExpenseAnnualSummary[] {
+  const inferredMonths = monthlyResults.reduce((max, row) => Math.max(max, row.monthIndex + 1), 0);
+  const years = Math.ceil(Math.max(0, projectionMonths ?? inferredMonths) / 12);
+  return Array.from({ length: years }, (_, index) => {
+    const rows = monthlyResults.filter(row => Math.floor(row.monthIndex / 12) === index);
+    const fixedExpenses = rows.reduce((sum, row) => sum + row.fixedAmount, 0);
+    const revenueBasedExpenses = rows.reduce((sum, row) => sum + row.revenueBasedAmount, 0);
+    return { year: index + 1, fixedExpenses, revenueBasedExpenses, totalOperatingExpenses: fixedExpenses + revenueBasedExpenses };
+  });
+}
+
+export function summarizeOperatingExpensesByCategory(monthlyResults: readonly OperatingExpenseMonthlyResult[]): Readonly<Record<string, number>> {
+  return monthlyResults.reduce<Record<string, number>>((totals, row) => {
+    totals[row.category] = (totals[row.category] || 0) + row.totalAmount;
+    return totals;
+  }, {});
+}
+
 export function calculateOperatingExpenses(expenses: Array<Partial<OperatingExpense> & Record<string, unknown>>, projectionMonths = 36, revenueMonthly: number[] = [], streams: RevenueStreamForecast[] = []): OperatingExpenseProjection {
-  const monthly = Array.from({ length: Math.max(0, Math.trunc(projectionMonths)) }, () => 0);
-  expenses.forEach(raw => {
+  const length = Math.max(0, Math.trunc(projectionMonths));
+  const fixedExpensesByMonth = Array.from({ length }, () => 0);
+  const revenueBasedExpensesByMonth = Array.from({ length }, () => 0);
+  const monthlyResults: OperatingExpenseMonthlyResult[] = [];
+  const expenseResults: OperatingExpenseResult[] = expenses.map(raw => {
     const expense = normalizeOperatingExpense(raw);
-    expenseMonthlySchedule(expense, projectionMonths).forEach((scheduled, index) => {
-      if (expense.calculationType === 'Fixed Amount') monthly[index] += scheduled;
-      else {
+    const amounts = expenseMonthlySchedule(expense, length).map((scheduled, index) => {
+      let fixedAmount = 0, revenueBasedAmount = 0;
+      if (expense.calculationType === 'Fixed Amount') fixedAmount = scheduled;
+      else if (index + 1 >= expense.startMonth && index + 1 <= (expense.endMonth ?? length)) {
         const basis = expense.revenueBasis === 'selected_revenue_streams'
           ? streams.filter(stream => expense.revenueStreamIds.includes(stream.id)).reduce((sum, stream) => sum + (stream.monthly[index] || 0), 0)
           : revenueMonthly[index] || 0;
-        if (index + 1 >= expense.startMonth && index + 1 <= (expense.endMonth ?? projectionMonths)) monthly[index] += basis * expense.amount / 100 * Math.pow(1 + expense.annualIncrease / 100, Math.floor(index / 12));
+        // Percentage rates remain constant: annual increases apply only to fixed payments.
+        revenueBasedAmount = basis * expense.amount / 100;
       }
+      fixedExpensesByMonth[index] += fixedAmount;
+      revenueBasedExpensesByMonth[index] += revenueBasedAmount;
+      const totalAmount = fixedAmount + revenueBasedAmount;
+      monthlyResults.push({ monthIndex: index, expenseId: expense.id, expenseName: expense.name, category: expense.category, fixedAmount, revenueBasedAmount, totalAmount });
+      return totalAmount;
     });
+    const annualTotals = Array.from({ length: Math.ceil(length / 12) }, (_, year) => amounts.slice(year * 12, year * 12 + 12).reduce((a, b) => a + b, 0));
+    return { expense, monthly: amounts, annualTotals, projectionTotal: amounts.reduce((a, b) => a + b, 0) };
   });
-  return { monthly, yearOne: monthly.slice(0, 12).reduce((a, b) => a + b, 0), threeYear: monthly.reduce((a, b) => a + b, 0) };
+  const monthly = fixedExpensesByMonth.map((value, index) => value + revenueBasedExpensesByMonth[index]);
+  const annualSummaries = summarizeOperatingExpensesByYear(monthlyResults, length);
+  const totalFixedExpenses = fixedExpensesByMonth.reduce((a, b) => a + b, 0);
+  const totalRevenueBasedExpenses = revenueBasedExpensesByMonth.reduce((a, b) => a + b, 0);
+  return { monthly, yearOne: monthly.slice(0, 12).reduce((a, b) => a + b, 0), threeYear: monthly.reduce((a, b) => a + b, 0), monthlyResults, expenseResults, fixedExpensesByMonth, revenueBasedExpensesByMonth, annualSummaries, categorySummaries: summarizeOperatingExpensesByCategory(monthlyResults), totalFixedExpenses, totalRevenueBasedExpenses, totalOperatingExpenses: totalFixedExpenses + totalRevenueBasedExpenses };
 }
+
+export const calculateOperatingExpenseProjection = calculateOperatingExpenses;

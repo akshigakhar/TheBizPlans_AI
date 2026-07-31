@@ -5,7 +5,7 @@ CREATE TABLE operating_expenses (
   business_plan_id uuid NOT NULL
     REFERENCES business_plans (id) ON DELETE CASCADE,
   expense_name text NOT NULL CHECK (btrim(expense_name) <> ''),
-  expense_category text NOT NULL CHECK (btrim(expense_category) <> ''),
+  expense_category text NOT NULL CHECK (expense_category IN ('premises','utilities','insurance','marketing','software_and_technology','professional_fees','repairs_and_maintenance','office_and_administration','travel','vehicle','banking_and_merchant_fees','licences_and_memberships','contract_services','communication','security_and_cleaning','taxes_and_permits','other')),
   calculation_type text NOT NULL
     CHECK (calculation_type IN ('fixed_amount', 'percentage_of_revenue')),
   fixed_amount numeric(15, 2),
@@ -48,6 +48,8 @@ CREATE TABLE operating_expenses (
 
 CREATE INDEX operating_expenses_business_plan_id_idx
   ON operating_expenses (business_plan_id);
+CREATE INDEX operating_expenses_plan_order_idx ON operating_expenses (business_plan_id, display_order);
+CREATE INDEX operating_expenses_plan_category_idx ON operating_expenses (business_plan_id, expense_category);
 
 CREATE TABLE operating_expense_revenue_streams (
   operating_expense_id uuid NOT NULL
