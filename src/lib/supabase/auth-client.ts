@@ -1,9 +1,9 @@
+import { supabasePublishableKey as publishableKey, supabaseUrl } from './config.ts';
+
 export type AuthUser = { id: string; email?: string; user_metadata?: Record<string, unknown> };
 export type AuthSession = { access_token: string; refresh_token: string; expires_at: number; expires_in?: number; user: AuthUser };
 export type RestoredAuth = { session: AuthSession | null; recovery: boolean };
 
-const supabaseUrl = ((import.meta as any).env?.VITE_SUPABASE_URL || '').replace(/\/$/, '');
-const publishableKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 const configuredRedirectUrl = (import.meta as any).env?.VITE_AUTH_REDIRECT_URL || '';
 const storageKey = 'thebizplans-auth-session';
 
