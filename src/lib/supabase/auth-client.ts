@@ -15,10 +15,13 @@ function assertConfigured() {
   if (!supabaseUrl || !publishableKey) throw new Error('Supabase authentication is not configured.');
 }
 
-function errorMessage(value: any) {
+export function authErrorMessage(value: any) {
   const message = value?.msg || value?.message || value?.error_description || value?.error;
   if (typeof message === 'string' && /invalid api key/i.test(message)) {
     return 'Account service configuration is out of date. Please contact support.';
+  }
+  if (typeof message === 'string' && /(?:error|failed) sending confirmation email/i.test(message)) {
+    return "We couldn't send your confirmation email. Please try again shortly or contact support.";
   }
   return message || 'Authentication request failed.';
 }
@@ -30,7 +33,7 @@ async function request(path: string, init: RequestInit = {}) {
     headers: { apikey: publishableKey, 'content-type': 'application/json', ...init.headers },
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(errorMessage(data));
+  if (!response.ok) throw new Error(authErrorMessage(data));
   return data;
 }
 
@@ -77,7 +80,8 @@ async function sessionFromCallback(): Promise<RestoredAuth | null> {
 
 export const supabaseAuth = {
   async signUp(email: string, password: string, displayName: string) {
-    const data = await request('/signup', {
+    const redirectTo = encodeURIComponent(authRedirectUrl());
+    const data = await request(`/signup?redirect_to=${redirectTo}`, {
       method: 'POST',
       body: JSON.stringify({ email, password, data: { display_name: displayName.trim() } }),
     });

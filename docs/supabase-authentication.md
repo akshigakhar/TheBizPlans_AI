@@ -37,6 +37,12 @@ a confirmation message and cannot sign in until it is confirmed.
 Configure production SMTP before launch. Supabase's default mail delivery is
 appropriate for development only and is rate limited.
 
+If account creation reports that it could not send a confirmation email, inspect
+the Supabase Auth logs for the mail-provider response, then verify the custom SMTP
+host, port, credentials, sender address, and sender-domain verification. The user
+may already have been created before mail delivery failed; check the Auth users
+list before repeatedly testing with the same address.
+
 ## Google sign-in
 
 The Google Cloud dashboard shown after selecting a project is the correct starting
