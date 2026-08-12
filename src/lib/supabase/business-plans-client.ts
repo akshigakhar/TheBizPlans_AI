@@ -1,4 +1,5 @@
 import type { AuthSession } from './auth-client.ts';
+import { supabasePublishableKey as publishableKey, supabaseUrl } from './config.ts';
 
 export type BusinessPlanRow = {
   id: string; user_id: string; plan_name: string; business_name: string;
@@ -11,8 +12,6 @@ export type BusinessPlanInput = {
   city?: string; currency?: string; projectionPeriod?: string;
 };
 
-const supabaseUrl = ((import.meta as any).env?.VITE_SUPABASE_URL || '').replace(/\/$/, '');
-const publishableKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 
 function projectionMonths(value = '') {
   const months = Number(value.match(/\d+/)?.[0] || 36);

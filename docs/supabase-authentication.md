@@ -85,7 +85,12 @@ application redirect URL.
 - [ ] Google provider enabled in Supabase with the client ID and secret
 - [ ] Supabase OAuth Server remains disabled
 
-## Required browser environment
+## Browser configuration
+
+The application includes the production project URL and publishable key as
+browser-safe defaults, so authentication also works when deployment environment
+variables have not been copied yet. Set the following variables to override
+those defaults (for example, when using a separate preview or local project):
 
 ```dotenv
 VITE_SUPABASE_URL=https://bfokmiteswljdgjjvxtt.supabase.co
