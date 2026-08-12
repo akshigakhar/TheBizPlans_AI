@@ -1,4 +1,4 @@
-import { supabasePublishableKey as publishableKey, supabaseUrl } from './config.ts';
+import { supabasePublishableKey as publishableKey, supabasePublishableKeys, supabaseUrl } from './config.ts';
 
 export type AuthUser = { id: string; email?: string; user_metadata?: Record<string, unknown> };
 export type AuthSession = { access_token: string; refresh_token: string; expires_at: number; expires_in?: number; user: AuthUser };
@@ -16,18 +16,30 @@ function assertConfigured() {
 }
 
 function errorMessage(value: any) {
-  return value?.msg || value?.message || value?.error_description || value?.error || 'Authentication request failed.';
+  const message = value?.msg || value?.message || value?.error_description || value?.error;
+  if (typeof message === 'string' && /invalid api key/i.test(message)) {
+    return 'Account service configuration is out of date. Please contact support.';
+  }
+  return message || 'Authentication request failed.';
+}
+
+function invalidApiKey(value: any) {
+  return /invalid api key/i.test(String(value?.msg || value?.message || value?.error_description || value?.error || ''));
 }
 
 async function request(path: string, init: RequestInit = {}) {
   assertConfigured();
-  const response = await fetch(`${supabaseUrl}/auth/v1${path}`, {
-    ...init,
-    headers: { apikey: publishableKey, 'content-type': 'application/json', ...init.headers },
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(errorMessage(data));
-  return data;
+  for (const [index, key] of supabasePublishableKeys.entries()) {
+    const response = await fetch(`${supabaseUrl}/auth/v1${path}`, {
+      ...init,
+      headers: { apikey: key, 'content-type': 'application/json', ...init.headers },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) return data;
+    const canRetry = invalidApiKey(data) && index < supabasePublishableKeys.length - 1;
+    if (!canRetry) throw new Error(errorMessage(data));
+  }
+  throw new Error('Supabase authentication is not configured.');
 }
 
 function persist(session: AuthSession | null) {
