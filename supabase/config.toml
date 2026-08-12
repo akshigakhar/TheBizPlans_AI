@@ -22,7 +22,7 @@ api_url = "http://127.0.0.1"
 [auth]
 enabled = true
 site_url = "http://localhost:5173"
-additional_redirect_urls = ["http://127.0.0.1:5173", "http://localhost:5173"]
+additional_redirect_urls = ["http://127.0.0.1:5173", "http://localhost:5173", "https://the-biz-plans-ai-akshigakhars-projects.vercel.app"]
 jwt_expiry = 3600
 enable_signup = true
 
