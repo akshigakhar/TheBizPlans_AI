@@ -129,12 +129,12 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
       return sum + (elapsed >= 0 && elapsed < asset.usefulLifeMonths ? (asset.purchaseAmount - asset.residualValue) / asset.usefulLifeMonths : 0);
     }, 0);
     const debtRow = debt.monthly[index];
-    const interest = debtRow?.interest_expense || 0;
+    const interest = debtRow?.interest_payment || 0;
     const ebit = ebitda - depreciation;
     const earningsBeforeTax = ebit - interest;
     const incomeTax = Math.max(0, earningsBeforeTax * nonnegative(assumptions.taxAssumptions.incomeTaxRate) / 100);
     taxAccruals.push(incomeTax);
-    const loanProceeds = assumptions.loanAssumptions.filter(loan => loan.existing_or_proposed === 'proposed' && loan.loan_start_month === month).reduce((sum, loan) => sum + loan.original_principal, 0);
+    const loanProceeds = debtRow?.loan_proceeds || 0;
     const ownerContributions = assumptions.fundingSources.filter(item => item.type === 'owner_contribution' && item.month === month).reduce((sum, item) => sum + item.amount, 0);
     const otherFunding = assumptions.fundingSources.filter(item => item.type === 'other' && item.month === month).reduce((sum, item) => sum + item.amount, 0);
     const startupPayments = assumptions.startupProjectCosts.filter(item => item.type !== 'capital_expenditure' && item.paymentMonth === month).reduce((sum, item) => sum + item.amount, 0);
@@ -154,7 +154,7 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const workingCapitalCashFlowImpact = changeInAccountsPayable - changeInAccountsReceivable - changeInInventory;
     const cashReceipts = totalRevenue[index] - changeInAccountsReceivable;
     const cashOperatingPayments = costOfSales + totalOperatingExpense - changeInAccountsPayable + changeInInventory;
-    const principal = (debtRow?.principal_repayment || 0) + (debtRow?.balloon_payment || 0);
+    const principal = (debtRow?.principal_payment || 0) + (debtRow?.balloon_payment || 0);
     const debtRepayments = principal + interest + (debtRow?.financing_fee || 0);
     const taxesPaid = taxAccruals[index - Math.max(0, Math.trunc(finite(assumptions.taxAssumptions.paymentLagMonths)))] || 0;
     const financingInflows = loanProceeds + ownerContributions + otherFunding;

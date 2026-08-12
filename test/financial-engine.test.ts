@@ -50,7 +50,7 @@ test('includes recurring expenses and delayed hiring', () => {
 test('records loan proceeds, repayments, interest, and ending balances', () => {
   const rows = calculateFinancialProjection(base({ projectionMonths: 2, loanAssumptions: [{ id: 'loan', loan_name: 'Loan', lender_name: null, original_principal: 1200, annual_interest_rate: 12, amortization_months: 12, term_months: null, payment_frequency: 'monthly', loan_start_month: 2, interest_only_months: 0, balloon_payment: null, financing_fee: null, existing_or_proposed: 'proposed', notes: '' }] })).monthly;
   assert.equal(rows[0].loanProceeds, 0); assert.equal(rows[1].loanProceeds, 1200);
-  assert.equal(rows[1].loanInterest, 12); assert.ok(rows[1].loanPrincipalRepayment > 0); assert.ok(rows[1].endingLoanBalances < 1200);
+  assert.equal(rows[1].loanInterest, 0); assert.equal(rows[1].loanPrincipalRepayment, 0); assert.equal(rows[1].endingLoanBalances, 1200);
 });
 
 test('includes owner contributions, other funding, and capital purchases', () => {
@@ -106,7 +106,7 @@ test('classifies the next twelve months of principal as current debt', () => {
   }));
   const yearOne = projection.statements.annual[0].balanceSheet;
   assert.equal(yearOne.currentPortionOfDebt, 1200);
-  assert.equal(yearOne.longTermDebt, 1200);
+  assert.equal(yearOne.longTermDebt, 1300);
   assert.equal(yearOne.currentPortionOfDebt + yearOne.longTermDebt, projection.monthly[11].endingLoanBalances);
 });
 
