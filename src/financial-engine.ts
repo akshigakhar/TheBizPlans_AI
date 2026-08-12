@@ -46,7 +46,12 @@ export interface MonthlyFinancialResult {
   netCashMovement: number; openingCash: number; closingCash: number;
   accountsReceivable: number; accountsPayable: number; inventory: number;
 }
-export interface FinancialProjection { projectionStartDate: string; projectionMonths: number; currency: string; monthly: MonthlyFinancialResult[] }
+export interface IncomeStatement { revenue: number; costOfSales: number; grossProfit: number; grossMargin: number; payroll: number; operatingExpenses: number; ebitda: number; depreciationAndAmortization: number; ebit: number; interestExpense: number; incomeBeforeTax: number; incomeTax: number; netIncome: number }
+export interface CashFlowStatement { cashFlowFromOperatingActivities: number; cashFlowFromInvestingActivities: number; cashFlowFromFinancingActivities: number; netChangeInCash: number; openingCash: number; closingCash: number }
+export interface BalanceSheet { cash: number; accountsReceivable: number; inventory: number; prepaidExpenses: number; netFixedAssets: number; totalAssets: number; accountsPayable: number; accruedLiabilities: number; currentPortionOfDebt: number; longTermDebt: number; totalLiabilities: number; ownerContributions: number; retainedEarnings: number; totalEquity: number; totalLiabilitiesAndEquity: number; balanceDifference: number; isBalanced: boolean }
+export interface FinancialStatementPeriod { label: string; incomeStatement: IncomeStatement; cashFlowStatement: CashFlowStatement; balanceSheet: BalanceSheet }
+export interface FinancialStatements { monthly: FinancialStatementPeriod[]; annual: FinancialStatementPeriod[] }
+export interface FinancialProjection { projectionStartDate: string; projectionMonths: number; currency: string; monthly: MonthlyFinancialResult[]; statements: FinancialStatements }
 
 const finite = (value: unknown): number => Number.isFinite(Number(value)) ? Number(value) : 0;
 const nonnegative = (value: unknown): number => Math.max(0, finite(value));
@@ -123,5 +128,40 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     previousReceivables = receivables; previousPayables = payables; previousInventory = inventory;
     return { month, date: monthDate(assumptions.projectionStartDate, index), revenueByStream: revenueRows, totalRevenue: totalRevenue[index], directCostByRevenueStream: directCostRows, totalCostOfSales: costOfSales, grossProfit, grossMargin: totalRevenue[index] ? grossProfit / totalRevenue[index] : 0, payroll: payrollAmount, operatingExpenses: operatingExpense, totalOperatingExpenses: totalOperatingExpense, ebitda, depreciationAndAmortization: depreciation, ebit, interestExpense: interest, earningsBeforeTax, incomeTax, netIncome: earningsBeforeTax - incomeTax, loanProceeds, loanPrincipalRepayment: principal, loanInterest: interest, endingLoanBalances: debtRow?.closing_balance || 0, ownerContributions, otherFunding, cashReceipts, cashOperatingPayments, startupProjectCostPayments: startupPayments, capitalExpenditures, financingInflows, debtRepayments, taxesPaid, netCashMovement, openingCash, closingCash: cash, accountsReceivable: receivables, accountsPayable: payables, inventory };
   });
-  return { projectionStartDate: assumptions.projectionStartDate, projectionMonths: length, currency: assumptions.currency, monthly };
+  return { projectionStartDate: assumptions.projectionStartDate, projectionMonths: length, currency: assumptions.currency, monthly, statements: buildFinancialStatements(monthly) };
+}
+
+/** Builds presentation-ready statements exclusively from the engine's monthly outputs. */
+function buildFinancialStatements(rows: MonthlyFinancialResult[]): FinancialStatements {
+  const period = (items: MonthlyFinancialResult[], label: string, endIndex: number): FinancialStatementPeriod => {
+    const sum = (key: keyof MonthlyFinancialResult) => items.reduce((total, row) => total + Number(row[key]), 0);
+    const end = items.at(-1)!;
+    const revenue = sum('totalRevenue'), grossProfit = sum('grossProfit');
+    const operating = sum('cashReceipts') - sum('cashOperatingPayments') - sum('startupProjectCostPayments') - sum('loanInterest') - sum('taxesPaid');
+    const investing = -sum('capitalExpenditures');
+    const financing = sum('financingInflows') - sum('loanPrincipalRepayment');
+    const depreciation = rows.slice(0, endIndex + 1).reduce((total, row) => total + row.depreciationAndAmortization, 0);
+    const fixedAssets = rows.slice(0, endIndex + 1).reduce((total, row) => total + row.capitalExpenditures, 0) - depreciation;
+    const accrued = rows.slice(0, endIndex + 1).reduce((total, row) => total + row.incomeTax - row.taxesPaid, 0);
+    const ownerContributions = rows[0].openingCash + rows.slice(0, endIndex + 1).reduce((total, row) => total + row.ownerContributions, 0);
+    const retainedEarnings = rows.slice(0, endIndex + 1).reduce((total, row) => total + row.netIncome, 0);
+    const futurePrincipal = rows.slice(endIndex + 1, endIndex + 13).reduce((total, row) => total + row.loanPrincipalRepayment, 0);
+    const currentDebt = Math.min(end.endingLoanBalances, futurePrincipal);
+    const longTermDebt = end.endingLoanBalances - currentDebt;
+    const totalAssets = end.closingCash + end.accountsReceivable + end.inventory + fixedAssets;
+    const totalLiabilities = end.accountsPayable + accrued + currentDebt + longTermDebt;
+    const totalEquity = ownerContributions + retainedEarnings;
+    const totalLiabilitiesAndEquity = totalLiabilities + totalEquity;
+    const balanceDifference = totalAssets - totalLiabilitiesAndEquity;
+    return { label,
+      incomeStatement: { revenue, costOfSales: sum('totalCostOfSales'), grossProfit, grossMargin: revenue ? grossProfit / revenue : 0, payroll: sum('payroll'), operatingExpenses: sum('operatingExpenses'), ebitda: sum('ebitda'), depreciationAndAmortization: sum('depreciationAndAmortization'), ebit: sum('ebit'), interestExpense: sum('interestExpense'), incomeBeforeTax: sum('earningsBeforeTax'), incomeTax: sum('incomeTax'), netIncome: sum('netIncome') },
+      cashFlowStatement: { cashFlowFromOperatingActivities: operating, cashFlowFromInvestingActivities: investing, cashFlowFromFinancingActivities: financing, netChangeInCash: operating + investing + financing, openingCash: items[0].openingCash, closingCash: end.closingCash },
+      balanceSheet: { cash: end.closingCash, accountsReceivable: end.accountsReceivable, inventory: end.inventory, prepaidExpenses: 0, netFixedAssets: fixedAssets, totalAssets, accountsPayable: end.accountsPayable, accruedLiabilities: accrued, currentPortionOfDebt: currentDebt, longTermDebt, totalLiabilities, ownerContributions, retainedEarnings, totalEquity, totalLiabilitiesAndEquity, balanceDifference, isBalanced: Math.abs(balanceDifference) <= 0.01 } };
+  };
+  const monthly = rows.map((row, index) => period([row], row.date.slice(0, 7), index));
+  const annual = Array.from({ length: Math.ceil(rows.length / 12) }, (_, year) => {
+    const start = year * 12, items = rows.slice(start, start + 12);
+    return period(items, `Year ${year + 1}`, start + items.length - 1);
+  });
+  return { monthly, annual };
 }

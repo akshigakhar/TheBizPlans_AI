@@ -81,3 +81,31 @@ test('calculates depreciation, tax accrual and lagged tax payment separately', (
   assert.equal(rows[0].depreciationAndAmortization, 10); assert.equal(rows[0].incomeTax, 9);
   assert.equal(rows[0].taxesPaid, 0); assert.equal(rows[1].taxesPaid, 9);
 });
+
+test('builds reconciled income, cash-flow, retained-earnings and balance-sheet statements', () => {
+  const projection = calculateFinancialProjection(base({ projectionMonths: 12, openingCash: 1000,
+    revenueStreams: [{ id: 'r', name: 'Sales', startMonth: 1, unitPrice: 100, monthlyUnits: 1 }],
+    directCostAssumptions: [{ revenueStreamId: 'r', percentage: 20 }],
+    startupProjectCosts: [{ id: 'asset', name: 'Equipment', amount: 120, paymentMonth: 1, type: 'capital_expenditure' }],
+    depreciationAssumptions: { assets: [{ id: 'asset', name: 'Equipment', cost: 120, inServiceMonth: 1, usefulLifeMonths: 12 }] },
+  }));
+  const annual = projection.statements.annual[0];
+  assert.equal(annual.incomeStatement.grossProfit, 960);
+  assert.equal(annual.incomeStatement.ebitda, 960);
+  assert.equal(annual.incomeStatement.ebit, 840);
+  assert.equal(annual.incomeStatement.netIncome, 840);
+  assert.equal(annual.cashFlowStatement.openingCash + annual.cashFlowStatement.netChangeInCash, annual.cashFlowStatement.closingCash);
+  assert.equal(annual.balanceSheet.retainedEarnings, projection.monthly.reduce((sum, row) => sum + row.netIncome, 0));
+  assert.equal(annual.balanceSheet.totalAssets, annual.balanceSheet.totalLiabilitiesAndEquity);
+  assert.equal(annual.balanceSheet.isBalanced, true);
+});
+
+test('classifies the next twelve months of principal as current debt', () => {
+  const projection = calculateFinancialProjection(base({ projectionMonths: 36,
+    loanAssumptions: [{ id: 'loan', loan_name: 'Loan', lender_name: null, original_principal: 3600, annual_interest_rate: 0, amortization_months: 36, term_months: null, payment_frequency: 'monthly', loan_start_month: 1, interest_only_months: 0, balloon_payment: null, financing_fee: null, existing_or_proposed: 'proposed', notes: '' }],
+  }));
+  const yearOne = projection.statements.annual[0].balanceSheet;
+  assert.equal(yearOne.currentPortionOfDebt, 1200);
+  assert.equal(yearOne.longTermDebt, 1200);
+  assert.equal(yearOne.currentPortionOfDebt + yearOne.longTermDebt, projection.monthly[11].endingLoanBalances);
+});
