@@ -1,6 +1,6 @@
 import type { FinancialSnapshot } from '../../../financial-review.ts';
 export type Answers=Record<string,any>;
-export interface PlanSource { profile:Record<string,any>; questionnaire:Answers; approvedFinancial?:Record<string,any>|null; approvedSnapshot?:FinancialSnapshot|null; currentFinancialHash?:string; }
+export interface PlanSource { profile:Record<string,any>; questionnaire:Answers; approvedFinancial?:Record<string,any>|null; approvedSnapshot?:FinancialSnapshot|null; currentFinancialHash?:string; narrativeApprovals?:Record<string,{versionId?:string;approvedAt?:string}>; }
 export const answer=(q:Answers,key:string)=>q[key];
 export const rows=(q:Answers,key:string)=>Array.isArray(q[key])?q[key].filter((row:any)=>row&&Object.values(row).some(Boolean)):[];
 export function compact<T>(value:T):T {
