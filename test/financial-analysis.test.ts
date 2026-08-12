@@ -33,7 +33,7 @@ test('calculates growth, margins, break-even, liquidity, cash, debt, runway, and
 
 test('safely explains zero EBITDA/debt service and calculates a funding shortfall runway', () => {
   const result = calculateFinancialAnalysis(project(base({ openingCash: 100, projectionMonths: 2, startupProjectCosts: [{ id: 'x', name: 'Setup', amount: 150, paymentMonth: 2, type: 'startup' }] })));
-  assert.equal(result.debtServiceCoverageRatio.value, null); assert.match(result.debtServiceCoverageRatio.explanation!, /both zero/);
+  assert.equal(result.debtServiceCoverageRatio.value, null); assert.match(result.debtServiceCoverageRatio.explanation!, /payments are zero/);
   assert.equal(result.minimumCashBalance, -50); assert.equal(result.maximumFundingShortfall, 50); assert.equal(result.cashRunwayMonths, 1);
   assert.equal(result.breakEvenMonthlyRevenue, null); assert.equal(result.breakEvenAnnualRevenue, null); assert.equal(result.estimatedBreakEvenMonth, null);
 });

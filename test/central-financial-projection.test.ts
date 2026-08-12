@@ -30,7 +30,10 @@ test('classifies startup assets, expenses, inventory and deposits without expens
     { id: 'equipment', name: 'Equipment', amount: 20000, paymentMonth: 1, type: 'capital_asset' }, { id: 'legal', name: 'Legal', amount: 5000, paymentMonth: 1, type: 'operating_expense' },
     { id: 'stock', name: 'Stock', amount: 2000, paymentMonth: 1, type: 'opening_inventory' }, { id: 'deposit', name: 'Deposit', amount: 1000, paymentMonth: 1, type: 'deposit_or_prepaid' },
   ] }));
-  const month = result.months[0]; assert.equal(month.capitalExpenditures, 20000); assert.equal(month.expensedStartupCosts, 5000); assert.equal(month.openingInventoryPurchases, 2000); assert.equal(month.deposits, 1000); assert.equal(month.netIncome, 0); assert.equal(month.closingCash, 22000);
+  const month = result.months[0]; assert.equal(month.capitalExpenditures, 20000); assert.equal(month.expensedStartupCosts, 5000); assert.equal(month.openingInventoryPurchases, 2000); assert.equal(month.deposits, 1000); assert.equal(month.netIncome, -5000); assert.equal(month.closingCash, 22000);
+  assert.equal(result.statements.monthly[0].balanceSheet.totalAssets, 45000);
+  assert.equal(result.statements.monthly[0].balanceSheet.totalEquity, 45000);
+  assert.equal(result.statements.monthly[0].balanceSheet.isBalanced, true);
 });
 
 test('preserves negative cash and reports funding shortfall', () => {
