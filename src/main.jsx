@@ -11,6 +11,7 @@ import { BUSINESS_PLAN_SECTIONS, BUSINESS_PLAN_EDITOR_SECTIONS } from './lib/bus
 import { BusinessPlanEditorService, getCurrentSectionContent, MAX_SECTION_CHARACTERS } from './lib/business-plan/editor-service.ts';
 import { BusinessPlanGenerationService, MemoryGenerationRepository } from './lib/business-plan/generation-service.ts';
 import { calculateLoanProjection, normalizeLoan, validateLoan, LOAN_TYPES } from './loans.ts';
+import { supabaseAuth } from './lib/supabase/auth-client.ts';
 import './styles.css';
 
 const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -24,7 +25,10 @@ const initialPlans = [
 ];
 
 function App() {
-  const [view, setView] = useState('dashboard');
+  const [view, setView] = useState('landing');
+  const [session, setSession] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authMode, setAuthMode] = useState('signup');
   const [activeStep, setActiveStep] = useState(0);
   const [plans, setPlans] = useState(initialPlans);
   const [toast, setToast] = useState('');
@@ -33,21 +37,26 @@ function App() {
   const update = (key, value) => setForm(f => ({ ...f, [key]: value }));
   const notify = msg => { setToast(msg); setTimeout(() => setToast(''), 2400); };
   const createPlan = () => { setPlans(p => [{ id: Date.now(), name: form.planName || 'Untitled business plan', company: form.businessName || 'New business', stage: 'Draft', progress: 9, updated: 'Just now' }, ...p]); setView('builder'); };
+  useEffect(()=>{let active=true;supabaseAuth.restoreSession().then(({session:value,recovery})=>{if(!active)return;setSession(value);if(recovery){setAuthMode('update');setView('signup')}else if(value)setView('dashboard')}).catch(error=>{if(active){setToast(error instanceof Error?error.message:'Unable to restore your session.');setView('signup')}}).finally(()=>active&&setAuthReady(true));return()=>{active=false}},[]);
+  useEffect(()=>{if(authReady&&!session&&!['landing','signup'].includes(view))setView('signup')},[authReady,session,view]);
+  const signOut=async()=>{try{await supabaseAuth.signOut(session)}finally{setSession(null);setView('landing')}};
+  if(!authReady)return <div className="auth-loading"><div className="generate-orb"><Lock size={25}/></div><p>Restoring your secure session…</p></div>;
+  const activeView=session||['landing','signup'].includes(view)?view:'signup';
 
-  return <div className={'app '+(['landing','signup'].includes(view) ? 'auth-app' : '')}>
-    <Sidebar view={view} setView={setView} />
+  return <div className={'app '+(['landing','signup'].includes(activeView) ? 'auth-app' : '')}>
+    <Sidebar view={activeView} setView={setView} session={session} onSignOut={signOut} />
     <main>
-      {!['landing','signup'].includes(view) && <Topbar />}
-      {!['landing','signup','dashboard'].includes(view) && <FlowTracker current={view === 'editor' ? 6 : flowView[view] ?? 0} />}
-      {view === 'landing' && <Landing onStart={() => setView('signup')} />}
-      {view === 'signup' && <SignUp onContinue={() => setView('setup')} onBack={() => setView('landing')} />}
-      {view === 'dashboard' && <Dashboard plans={plans} setPlans={setPlans} onCreate={() => setView('setup')} setView={setView} notify={notify} />}
-      {view === 'setup' && <Setup form={form} update={update} onCancel={() => setView('dashboard')} onCreate={createPlan} />}
-      {view === 'builder' && <Builder form={form} update={update} activeStep={activeStep} setActiveStep={setActiveStep} setView={setView} notify={notify} />}
-      {view === 'financials' && <Financials setView={setView} currency={form.currency} onReviewChange={setFinancialReview} />}
-      {view === 'review' && <Review review={financialReview} onBack={() => setView('financials')} onContinue={() => setView('editor')} />}
-      {view === 'generating' && <Generating />}
-      {view === 'editor' && <Editor form={form} review={financialReview} notify={notify} />}
+      {!['landing','signup'].includes(activeView) && <Topbar />}
+      {!['landing','signup','dashboard'].includes(activeView) && <FlowTracker current={activeView === 'editor' ? 6 : flowView[activeView] ?? 0} />}
+      {activeView === 'landing' && <Landing onStart={() => {setAuthMode('signup');setView('signup')}} onSignIn={() => {setAuthMode('signin');setView('signup')}} />}
+      {activeView === 'signup' && <SignUp initialMode={authMode} session={session} onAuthenticated={value=>{setSession(value);setView('dashboard')}} onBack={signOut} />}
+      {activeView === 'dashboard' && <Dashboard plans={plans} setPlans={setPlans} onCreate={() => setView('setup')} setView={setView} notify={notify} />}
+      {activeView === 'setup' && <Setup form={form} update={update} onCancel={() => setView('dashboard')} onCreate={createPlan} />}
+      {activeView === 'builder' && <Builder form={form} update={update} activeStep={activeStep} setActiveStep={setActiveStep} setView={setView} notify={notify} />}
+      {activeView === 'financials' && <Financials setView={setView} currency={form.currency} onReviewChange={setFinancialReview} />}
+      {activeView === 'review' && <Review review={financialReview} onBack={() => setView('financials')} onContinue={() => setView('editor')} />}
+      {activeView === 'generating' && <Generating />}
+      {activeView === 'editor' && <Editor form={form} review={financialReview} notify={notify} />}
     </main>
     {toast && <div className="toast"><Check size={18}/>{toast}</div>}
   </div>;
@@ -55,10 +64,10 @@ function App() {
 
 function Brand() { return <div className="public-brand"><div className="logo"><FileChartColumn/></div><div>TheBizPlans <b>AI</b></div></div> }
 
-function Landing({ onStart }) {
+function Landing({ onStart, onSignIn }) {
   const sections = ['Executive summary','Company overview','Market analysis','Products & services','Sales & marketing','Operations plan'];
   return <div className="landing">
-    <nav className="landing-nav"><Brand/><div><a href="#included">What’s included</a><a href="#how">How it works</a><button className="nav-login" onClick={onStart}>Sign in</button><button className="primary" onClick={onStart}>Create My Business Plan</button></div></nav>
+    <nav className="landing-nav"><Brand/><div><a href="#included">What’s included</a><a href="#how">How it works</a><button className="nav-login" onClick={onSignIn}>Sign in</button><button className="primary" onClick={onStart}>Create My Business Plan</button></div></nav>
     <section className="hero"><div className="hero-copy"><span className="hero-pill"><Sparkles size={14}/> AI-guided business planning</span><h1>A professional business plan,<br/><em>built around your idea.</em></h1><p>Answer a few guided questions and turn your vision into a clear, lender-ready business plan—with financial projections included.</p><div className="hero-actions"><button className="primary hero-cta" onClick={onStart}>Create My Business Plan <ArrowRight size={18}/></button><span>No credit card required</span></div><div className="hero-trust"><span><Check/>Step-by-step guidance</span><span><Check/>Edit anything</span><span><Check/>Download anytime</span></div></div>
       <div className="plan-preview"><div className="preview-top"><div className="preview-brand"><FileChartColumn size={17}/></div><span>YOUR BUSINESS PLAN</span><i>Draft</i></div><h2>Brightside Coffee Co.</h2><p>BUSINESS PLAN · 2026–2029</p><div className="preview-rule"/><div className="preview-content"><span>EXECUTIVE SUMMARY</span><h3>A neighborhood coffee shop built for connection.</h3><i/><i/><i className="short"/><div className="preview-metrics"><div><b>$248K</b><small>YEAR 1 REVENUE</small></div><div><b>64%</b><small>GROSS MARGIN</small></div><div><b>Month 8</b><small>BREAK-EVEN</small></div></div></div><div className="floating-chip chip-edit"><PencilLine/>Fully editable</div><div className="floating-chip chip-finance"><BarChart3/>3-year projections</div></div>
     </section>
@@ -70,12 +79,22 @@ function Landing({ onStart }) {
 
 function FlowTracker({ current }) { return <div className="flow-wrap"><div className="flow-track">{flow.map((label, index) => <React.Fragment key={label}><div className={'flow-step '+(index < current ? 'done' : index === current ? 'current' : '')}><span>{index < current ? <Check size={13}/> : index + 1}</span><b>{label}</b></div>{index < flow.length - 1 && <i/>}</React.Fragment>)}</div></div> }
 
-function SignUp({ onContinue, onBack }) { const [mode,setMode]=useState('signup'); const [name,setName]=useState(''); const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); return <div className="auth-shell"><div className="auth-nav"><button onClick={onBack}><Brand/></button><button className="back-home" onClick={onBack}><ArrowLeft size={16}/> Back to home</button></div><div className="auth-page"><section className="auth-copy"><span className="hero-pill"><Sparkles size={14}/> YOUR PLAN STARTS HERE</span><h1>Turn your business idea into a plan you’re proud to share.</h1><p>Join entrepreneurs using TheBizPlans AI to move from blank page to a polished, professional plan.</p><div className="auth-points"><span><Check/>Guided, plain-language questions</span><span><Check/>Built-in 3-year financial projections</span><span><Check/>Editable Word, PDF and Excel exports</span></div><div className="auth-quote">“It gave me the structure and confidence to finally put my business idea on paper.”<b>— Maya, small business owner</b></div></section><section className="card signup-card">{mode==='reset'?<><span className="eyebrow">PASSWORD RESET</span><h1>Reset your password</h1><p>Enter your email and we’ll send you a secure reset link.</p><Field label="Email address" value={email} onChange={setEmail} placeholder="you@company.com"/><button className="primary signup-button" onClick={()=>setMode('signin')}>Send reset link <ArrowRight size={17}/></button><button className="text-button" onClick={()=>setMode('signin')}><ArrowLeft size={14}/> Back to sign in</button></>:<><span className="eyebrow">{mode==='signup'?'CREATE YOUR ACCOUNT':'WELCOME BACK'}</span><h1>{mode==='signup'?'Start building today':'Sign in to your account'}</h1><p>{mode==='signup'?'Create your account and begin your plan in minutes.':'Continue working on your business plan.'}</p><button className="google-button" onClick={onContinue}><b>G</b> Continue with Google</button><div className="or"><span>or continue with email</span></div>{mode==='signup'&&<Field label="Your name" value={name} onChange={setName} placeholder="Alex Morgan"/>}<Field label="Email address" value={email} onChange={setEmail} placeholder="you@company.com"/><div className="password-label"><label>Password</label>{mode==='signin'&&<button onClick={()=>setMode('reset')}>Forgot password?</button>}</div><input type="password" value={password} placeholder="At least 8 characters" onChange={e=>setPassword(e.target.value)}/><button className="primary signup-button" onClick={onContinue}>{mode==='signup'?'Create account':'Sign in'} <ArrowRight size={17}/></button><small><Lock size={12}/> Your information is private and securely stored.</small><div className="signin">{mode==='signup'?'Already have an account?':'New to TheBizPlans AI?'} <button onClick={()=>setMode(mode==='signup'?'signin':'signup')}>{mode==='signup'?'Sign in':'Create an account'}</button></div></>}</section></div></div> }
+function SignUp({ initialMode='signup', session, onAuthenticated, onBack }) {
+  const [mode,setMode]=useState(initialMode),[name,setName]=useState(''),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+  useEffect(()=>setMode(initialMode),[initialMode]);
+  const clear=()=>{setError('');setNotice('')};
+  const changeMode=value=>{clear();setPassword('');setMode(value)};
+  const submit=async event=>{event.preventDefault();clear();if(mode==='reset'){if(!email.trim()){setError('Enter the email address for your account.');return}setBusy(true);try{await supabaseAuth.sendPasswordReset(email.trim());setNotice('Password reset email sent. Follow the secure link to choose a new password.')}catch(value){setError(value instanceof Error?value.message:'Unable to send the reset email.')}finally{setBusy(false)}return}if(password.length<8||(['signup','signin'].includes(mode)&&!email.trim())){setError('Enter a valid email and a password of at least 8 characters.');return}setBusy(true);try{if(mode==='update'){if(!session)throw new Error('Your password-reset link is invalid or expired. Request a new one.');onAuthenticated(await supabaseAuth.updatePassword(session,password));return}if(mode==='signup'){const result=await supabaseAuth.signUp(email.trim(),password,name);if(result.session)onAuthenticated(result.session);else setNotice('Check your email to confirm your account, then sign in.')}else onAuthenticated(await supabaseAuth.signIn(email.trim(),password))}catch(value){setError(value instanceof Error?value.message:'Authentication failed.')}finally{setBusy(false)}};
+  const google=()=>{clear();try{supabaseAuth.signInWithGoogle()}catch(value){setError(value instanceof Error?value.message:'Unable to start Google sign-in.')}};
+  const copy={signup:['CREATE YOUR ACCOUNT','Start building today','Create your account and begin your plan in minutes.'],signin:['WELCOME BACK','Sign in to your account','Continue working on your business plan.'],reset:['PASSWORD RESET','Reset your password','Enter your email and we’ll send you a secure reset link.'],update:['CHOOSE A NEW PASSWORD','Secure your account','Enter a new password for your account.']}[mode];
+  return <div className="auth-shell"><div className="auth-nav"><button onClick={onBack}><Brand/></button><button className="back-home" onClick={onBack}><ArrowLeft size={16}/> Back to home</button></div><div className="auth-page"><section className="auth-copy"><span className="hero-pill"><Sparkles size={14}/> YOUR PLAN STARTS HERE</span><h1>Turn your business idea into a plan you’re proud to share.</h1><p>Join entrepreneurs using TheBizPlans AI to move from blank page to a polished, professional plan.</p><div className="auth-points"><span><Check/>Guided, plain-language questions</span><span><Check/>Built-in 3-year financial projections</span><span><Check/>Editable Word, PDF and Excel exports</span></div><div className="auth-quote">“It gave me the structure and confidence to finally put my business idea on paper.”<b>— Maya, small business owner</b></div></section><form className="card signup-card" onSubmit={submit}><span className="eyebrow">{copy[0]}</span><h1>{copy[1]}</h1><p>{copy[2]}</p>{['signup','signin'].includes(mode)&&<button type="button" className="google-button" onClick={google}><b>G</b> Continue with Google</button>}{['signup','signin'].includes(mode)&&<div className="or"><span>or continue with email</span></div>}{mode==='signup'&&<Field label="Your name" value={name} onChange={setName} placeholder="Alex Morgan"/>}{mode!=='update'&&<Field label="Email address" value={email} onChange={setEmail} placeholder="you@company.com"/>}{mode!=='reset'&&<><div className="password-label"><label>{mode==='update'?'New password':'Password'}</label>{mode==='signin'&&<button type="button" onClick={()=>changeMode('reset')}>Forgot password?</button>}</div><input type="password" value={password} minLength={8} autoComplete={mode==='update'?'new-password':mode==='signup'?'new-password':'current-password'} placeholder="At least 8 characters" onChange={e=>setPassword(e.target.value)}/></>}{error&&<div className="auth-message error" role="alert"><AlertTriangle size={16}/>{error}</div>}{notice&&<div className="auth-message success" role="status"><Check size={16}/>{notice}</div>}<button className="primary signup-button" disabled={busy}>{busy?'Please wait…':mode==='signup'?'Create account':mode==='signin'?'Sign in':mode==='reset'?'Send reset link':'Update password'} <ArrowRight size={17}/></button><small><Lock size={12}/> Your information is private and securely stored.</small>{mode==='reset'?<button type="button" className="text-button" onClick={()=>changeMode('signin')}><ArrowLeft size={14}/> Back to sign in</button>:mode!=='update'&&<div className="signin">{mode==='signup'?'Already have an account?':'New to TheBizPlans AI?'} <button type="button" onClick={()=>changeMode(mode==='signup'?'signin':'signup')}>{mode==='signup'?'Sign in':'Create an account'}</button></div>}</form></div></div>
+}
 
-function Sidebar({ view, setView }) {
+function Sidebar({ view, setView, session, onSignOut }) {
   const nav = [{id:'dashboard', icon:LayoutDashboard, label:'Dashboard'}, {id:'builder', icon:BookOpen, label:'Plan builder'}, {id:'financials', icon:BarChart3, label:'Financials'}, {id:'editor', icon:FileText, label:'Generated plan'}];
   if (view === 'signup' || view === 'landing') return null;
-  return <aside><div className="brand"><div className="logo"><FileChartColumn/></div><div>TheBizPlans <b>AI</b><small>Business plans, made clear.</small></div></div><nav>{nav.map(({id,icon:Icon,label}) => <button className={view===id?'active':''} onClick={()=>setView(id)} key={id}><Icon size={19}/>{label}</button>)}</nav><div className="aside-bottom"><button><Users size={19}/>Team</button><button><Settings size={19}/>Settings</button><div className="upgrade"><Sparkles size={19}/><strong>Unlock your final plan</strong><span>Export Word, PDF & Excel</span><button>View plans</button></div><div className="user"><div className="avatar">AM</div><div><strong>Alex Morgan</strong><small>alex@acmestudio.co</small></div><MoreHorizontal size={18}/></div></div></aside>;
+  const email=session?.user?.email||'',display=session?.user?.user_metadata?.display_name||email.split('@')[0]||'Account';
+  return <aside><div className="brand"><div className="logo"><FileChartColumn/></div><div>TheBizPlans <b>AI</b><small>Business plans, made clear.</small></div></div><nav>{nav.map(({id,icon:Icon,label}) => <button className={view===id?'active':''} onClick={()=>setView(id)} key={id}><Icon size={19}/>{label}</button>)}</nav><div className="aside-bottom"><button><Users size={19}/>Team</button><button><Settings size={19}/>Settings</button><div className="upgrade"><Sparkles size={19}/><strong>Unlock your final plan</strong><span>Export Word, PDF & Excel</span><button>View plans</button></div><div className="user"><div className="avatar">{display.slice(0,2).toUpperCase()}</div><div><strong>{display}</strong><small>{email}</small></div><button className="signout-button" title="Sign out" aria-label="Sign out" onClick={onSignOut}><MoreHorizontal size={18}/></button></div></div></aside>;
 }
 
 function Topbar(){ return <header><div className="mobile-brand">TheBizPlans AI</div><div className="top-actions"><button className="icon"><Search size={19}/></button><button className="icon"><Bell size={19}/><i/></button><div className="help">Need help? <b>View guide</b></div></div></header> }
