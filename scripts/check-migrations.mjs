@@ -27,6 +27,10 @@ const checks = [
       'enable row level security',
     ],
   },
+  {
+    file: 'migrations/20260812090000_allow_plan_owner_delete.sql',
+    required: ['users delete own plans', 'for delete', 'auth.uid()'],
+  },
 ];
 
 for (const { file, required } of checks) {
