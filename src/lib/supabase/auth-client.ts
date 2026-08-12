@@ -26,6 +26,11 @@ export function authErrorMessage(value: any) {
   return message || 'Authentication request failed.';
 }
 
+export function isConfirmationEmailError(value: unknown) {
+  const message = value instanceof Error ? value.message : authErrorMessage(value);
+  return /(?:couldn't|error|failed) (?:send|sending) (?:your )?confirmation email/i.test(message);
+}
+
 async function request(path: string, init: RequestInit = {}) {
   assertConfigured();
   const response = await fetch(`${supabaseUrl}/auth/v1${path}`, {
@@ -94,6 +99,13 @@ export const supabaseAuth = {
     }));
     if (!session) throw new Error('The sign-in response did not include a session.');
     return session;
+  },
+
+  async resendConfirmation(email: string) {
+    await request('/resend', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'signup', email, email_redirect_to: authRedirectUrl() }),
+    });
   },
 
   signInWithGoogle(redirectTo = authRedirectUrl()) {
