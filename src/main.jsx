@@ -11,6 +11,7 @@ import { BUSINESS_PLAN_SECTIONS, BUSINESS_PLAN_EDITOR_SECTIONS } from './lib/bus
 import { BusinessPlanEditorService, getCurrentSectionContent, MAX_SECTION_CHARACTERS } from './lib/business-plan/editor-service.ts';
 import { BusinessPlanGenerationService, MemoryGenerationRepository } from './lib/business-plan/generation-service.ts';
 import { calculateLoanProjection, normalizeLoan, validateLoan, LOAN_TYPES } from './loans.ts';
+import { supabase } from './lib/supabase/client.ts';
 import './styles.css';
 
 const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -24,15 +25,30 @@ const initialPlans = [
 ];
 
 function App() {
-  const [view, setView] = useState('dashboard');
+  const [view, setView] = useState(() => supabase.configured && !supabase.auth.getSession() ? 'landing' : 'dashboard');
   const [activeStep, setActiveStep] = useState(0);
-  const [plans, setPlans] = useState(initialPlans);
+  const [plans, setPlans] = useState(() => supabase.configured ? [] : initialPlans);
   const [toast, setToast] = useState('');
   const [financialReview, setFinancialReview] = useState(null);
+  const [session, setSession] = useState(() => supabase.auth.getSession());
+  const [authReady, setAuthReady] = useState(false);
   const [form, setForm] = useState({ planName: 'Acme Studio — Growth Plan', businessName: 'Acme Creative Studio', country: 'United States', region: 'New York', city: 'Brooklyn', stage: 'Expansion', purpose: 'Bank or lender', projectionPeriod: '3 years (36 months)', currency: 'USD', description: 'A strategy and design studio helping growing organizations build clear brands and effective digital experiences.', problem: 'Growing businesses often lack consistent brand direction and an experienced, flexible creative team.', difference: 'Senior-level expertise, a focused process, and flexible project or retainer engagements.', shortGoals: 'Build recurring client revenue and hire a full-time designer.', longGoals: 'Become the trusted creative partner for growth-stage organizations across the United States.' });
   const update = (key, value) => setForm(f => ({ ...f, [key]: value }));
   const notify = msg => { setToast(msg); setTimeout(() => setToast(''), 2400); };
-  const createPlan = () => { setPlans(p => [{ id: Date.now(), name: form.planName || 'Untitled business plan', company: form.businessName || 'New business', stage: 'Draft', progress: 9, updated: 'Just now' }, ...p]); setView('builder'); };
+  useEffect(() => {
+    supabase.auth.consumeRedirect();
+    setSession(supabase.auth.getSession());
+    setAuthReady(true);
+    return supabase.auth.onAuthStateChange(setSession);
+  }, []);
+  useEffect(() => {
+    if (!session) return;
+    supabase.plans.list().then(rows => setPlans(rows.map(row => ({id:row.id,name:row.plan_name,company:row.business_name,stage:row.stage,progress:row.progress,updated:new Date(row.updated_at).toLocaleDateString()})))).catch(error => notify(error.message));
+  }, [session]);
+  const createPlan = async () => { if(!supabase.configured){setPlans(p=>[{id:Date.now(),name:form.planName||'Untitled business plan',company:form.businessName||'New business',stage:'Draft',progress:9,updated:'Just now'},...p]);setView('builder');return}try { const row=await supabase.plans.create({planName:form.planName||'Untitled business plan',businessName:form.businessName||'New business'});setPlans(p=>[{id:row.id,name:row.plan_name,company:row.business_name,stage:row.stage,progress:row.progress,updated:'Just now'},...p]);setView('builder'); } catch(error) { notify(error.message); } };
+  const authenticate=async input=>{try{if(input.action==='google')return supabase.auth.signInWithGoogle();if(input.action==='reset'){await supabase.auth.resetPassword(input.email);notify('Password reset email sent');return}const result=input.action==='signup'?await supabase.auth.signUp(input.email,input.password,input.name):await supabase.auth.signIn(input.email,input.password);if(!result.access_token){notify('Check your email to confirm your account');return}setView('dashboard')}catch(error){notify(error.message)}};
+
+  if(!authReady)return <div className="app auth-app"/>;
 
   return <div className={'app '+(['landing','signup'].includes(view) ? 'auth-app' : '')}>
     <Sidebar view={view} setView={setView} />
@@ -40,7 +56,7 @@ function App() {
       {!['landing','signup'].includes(view) && <Topbar />}
       {!['landing','signup','dashboard'].includes(view) && <FlowTracker current={view === 'editor' ? 6 : flowView[view] ?? 0} />}
       {view === 'landing' && <Landing onStart={() => setView('signup')} />}
-      {view === 'signup' && <SignUp onContinue={() => setView('setup')} onBack={() => setView('landing')} />}
+      {view === 'signup' && <SignUp onContinue={authenticate} onBack={() => setView('landing')} />}
       {view === 'dashboard' && <Dashboard plans={plans} setPlans={setPlans} onCreate={() => setView('setup')} setView={setView} notify={notify} />}
       {view === 'setup' && <Setup form={form} update={update} onCancel={() => setView('dashboard')} onCreate={createPlan} />}
       {view === 'builder' && <Builder form={form} update={update} activeStep={activeStep} setActiveStep={setActiveStep} setView={setView} notify={notify} />}
@@ -70,7 +86,7 @@ function Landing({ onStart }) {
 
 function FlowTracker({ current }) { return <div className="flow-wrap"><div className="flow-track">{flow.map((label, index) => <React.Fragment key={label}><div className={'flow-step '+(index < current ? 'done' : index === current ? 'current' : '')}><span>{index < current ? <Check size={13}/> : index + 1}</span><b>{label}</b></div>{index < flow.length - 1 && <i/>}</React.Fragment>)}</div></div> }
 
-function SignUp({ onContinue, onBack }) { const [mode,setMode]=useState('signup'); const [name,setName]=useState(''); const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); return <div className="auth-shell"><div className="auth-nav"><button onClick={onBack}><Brand/></button><button className="back-home" onClick={onBack}><ArrowLeft size={16}/> Back to home</button></div><div className="auth-page"><section className="auth-copy"><span className="hero-pill"><Sparkles size={14}/> YOUR PLAN STARTS HERE</span><h1>Turn your business idea into a plan you’re proud to share.</h1><p>Join entrepreneurs using TheBizPlans AI to move from blank page to a polished, professional plan.</p><div className="auth-points"><span><Check/>Guided, plain-language questions</span><span><Check/>Built-in 3-year financial projections</span><span><Check/>Editable Word, PDF and Excel exports</span></div><div className="auth-quote">“It gave me the structure and confidence to finally put my business idea on paper.”<b>— Maya, small business owner</b></div></section><section className="card signup-card">{mode==='reset'?<><span className="eyebrow">PASSWORD RESET</span><h1>Reset your password</h1><p>Enter your email and we’ll send you a secure reset link.</p><Field label="Email address" value={email} onChange={setEmail} placeholder="you@company.com"/><button className="primary signup-button" onClick={()=>setMode('signin')}>Send reset link <ArrowRight size={17}/></button><button className="text-button" onClick={()=>setMode('signin')}><ArrowLeft size={14}/> Back to sign in</button></>:<><span className="eyebrow">{mode==='signup'?'CREATE YOUR ACCOUNT':'WELCOME BACK'}</span><h1>{mode==='signup'?'Start building today':'Sign in to your account'}</h1><p>{mode==='signup'?'Create your account and begin your plan in minutes.':'Continue working on your business plan.'}</p><button className="google-button" onClick={onContinue}><b>G</b> Continue with Google</button><div className="or"><span>or continue with email</span></div>{mode==='signup'&&<Field label="Your name" value={name} onChange={setName} placeholder="Alex Morgan"/>}<Field label="Email address" value={email} onChange={setEmail} placeholder="you@company.com"/><div className="password-label"><label>Password</label>{mode==='signin'&&<button onClick={()=>setMode('reset')}>Forgot password?</button>}</div><input type="password" value={password} placeholder="At least 8 characters" onChange={e=>setPassword(e.target.value)}/><button className="primary signup-button" onClick={onContinue}>{mode==='signup'?'Create account':'Sign in'} <ArrowRight size={17}/></button><small><Lock size={12}/> Your information is private and securely stored.</small><div className="signin">{mode==='signup'?'Already have an account?':'New to TheBizPlans AI?'} <button onClick={()=>setMode(mode==='signup'?'signin':'signup')}>{mode==='signup'?'Sign in':'Create an account'}</button></div></>}</section></div></div> }
+function SignUp({ onContinue, onBack }) { const [mode,setMode]=useState('signup'); const [name,setName]=useState(''); const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); return <div className="auth-shell"><div className="auth-nav"><button onClick={onBack}><Brand/></button><button className="back-home" onClick={onBack}><ArrowLeft size={16}/> Back to home</button></div><div className="auth-page"><section className="auth-copy"><span className="hero-pill"><Sparkles size={14}/> YOUR PLAN STARTS HERE</span><h1>Turn your business idea into a plan you’re proud to share.</h1><p>Join entrepreneurs using TheBizPlans AI to move from blank page to a polished, professional plan.</p><div className="auth-points"><span><Check/>Guided, plain-language questions</span><span><Check/>Built-in 3-year financial projections</span><span><Check/>Editable Word, PDF and Excel exports</span></div><div className="auth-quote">“It gave me the structure and confidence to finally put my business idea on paper.”<b>— Maya, small business owner</b></div></section><section className="card signup-card">{mode==='reset'?<><span className="eyebrow">PASSWORD RESET</span><h1>Reset your password</h1><p>Enter your email and we’ll send you a secure reset link.</p><Field label="Email address" value={email} onChange={setEmail} placeholder="you@company.com"/><button className="primary signup-button" onClick={()=>onContinue({action:'reset',email})}>Send reset link <ArrowRight size={17}/></button><button className="text-button" onClick={()=>setMode('signin')}><ArrowLeft size={14}/> Back to sign in</button></>:<><span className="eyebrow">{mode==='signup'?'CREATE YOUR ACCOUNT':'WELCOME BACK'}</span><h1>{mode==='signup'?'Start building today':'Sign in to your account'}</h1><p>{mode==='signup'?'Create your account and begin your plan in minutes.':'Continue working on your business plan.'}</p><button className="google-button" onClick={()=>onContinue({action:'google'})}><b>G</b> Continue with Google</button><div className="or"><span>or continue with email</span></div>{mode==='signup'&&<Field label="Your name" value={name} onChange={setName} placeholder="Alex Morgan"/>}<Field label="Email address" value={email} onChange={setEmail} placeholder="you@company.com"/><div className="password-label"><label>Password</label>{mode==='signin'&&<button onClick={()=>setMode('reset')}>Forgot password?</button>}</div><input type="password" value={password} placeholder="At least 8 characters" onChange={e=>setPassword(e.target.value)}/><button className="primary signup-button" onClick={()=>onContinue({action:mode,email,password,name})}>{mode==='signup'?'Create account':'Sign in'} <ArrowRight size={17}/></button><small><Lock size={12}/> Your information is private and securely stored.</small><div className="signin">{mode==='signup'?'Already have an account?':'New to TheBizPlans AI?'} <button onClick={()=>setMode(mode==='signup'?'signin':'signup')}>{mode==='signup'?'Sign in':'Create an account'}</button></div></>}</section></div></div> }
 
 function Sidebar({ view, setView }) {
   const nav = [{id:'dashboard', icon:LayoutDashboard, label:'Dashboard'}, {id:'builder', icon:BookOpen, label:'Plan builder'}, {id:'financials', icon:BarChart3, label:'Financials'}, {id:'editor', icon:FileText, label:'Generated plan'}];
@@ -82,13 +98,11 @@ function Topbar(){ return <header><div className="mobile-brand">TheBizPlans AI</
 
 function Dashboard({plans,setPlans,onCreate,setView,notify}) {
   const average = plans.length ? Math.round(plans.reduce((sum, plan) => sum + plan.progress, 0) / plans.length) : 0;
-  const duplicatePlan = plan => {
-    setPlans(current => [{ ...plan, id: Date.now(), name: `${plan.name} (Copy)`, stage: 'Draft', updated: 'Just now' }, ...current]);
-    notify('Plan duplicated');
+  const duplicatePlan = async plan => {
+    if(!supabase.configured){setPlans(current=>[{...plan,id:Date.now(),name:`${plan.name} (Copy)`,stage:'Draft',updated:'Just now'},...current]);notify('Plan duplicated');return}try{const row=await supabase.plans.create({planName:`${plan.name} (Copy)`,businessName:plan.company});setPlans(current=>[{id:row.id,name:row.plan_name,company:row.business_name,stage:row.stage,progress:row.progress,updated:'Just now'},...current]);notify('Plan duplicated')}catch(error){notify(error.message)}
   };
-  const deletePlan = plan => {
-    setPlans(current => current.filter(item => item.id !== plan.id));
-    notify('Plan deleted');
+  const deletePlan = async plan => {
+    if(!supabase.configured){setPlans(current=>current.filter(item=>item.id!==plan.id));notify('Plan deleted');return}try{await supabase.plans.remove(String(plan.id));setPlans(current=>current.filter(item=>item.id!==plan.id));notify('Plan deleted')}catch(error){notify(error.message)}
   };
   const downloadPlan = plan => {
     const file = new Blob([`${plan.name}\n${plan.company}\n\nBusiness plan — ${plan.progress}% complete`], { type: 'text/plain' });
