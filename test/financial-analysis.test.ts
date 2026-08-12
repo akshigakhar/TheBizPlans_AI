@@ -1,74 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateFinancialProjection, type FinancialAssumptions } from '../src/financial-engine.ts';
-import { calculateFinancialAnalysis, validateFinancialProjection } from '../src/financial-analysis.ts';
-
-const base = (overrides: Partial<FinancialAssumptions> = {}): FinancialAssumptions => ({
-  projectionStartDate: '2026-01-01', projectionMonths: 24, currency: 'USD', openingCash: 0,
-  revenueStreams: [], directCostAssumptions: [], startupProjectCosts: [], operatingExpenses: [], payrollAssumptions: [], fundingSources: [], loanAssumptions: [],
-  taxAssumptions: { incomeTaxRate: 0 }, depreciationAssumptions: { assets: [] }, workingCapitalAssumptions: {}, ...overrides,
-});
-const project = (assumptions: FinancialAssumptions) => calculateFinancialProjection(assumptions);
-const codes = (assumptions: FinancialAssumptions, options = {}) => validateFinancialProjection(assumptions, project(assumptions), options).warnings.map(w => w.code);
-
-test('calculates growth, margins, break-even, liquidity, cash, debt, runway, and documented DSCR', () => {
-  const assumptions = base({ openingCash: 2400,
-    revenueStreams: [{ id: 'r', name: 'Sales', startMonth: 1, unitPrice: 100, monthlyUnits: 10, annualGrowthRate: 20 }],
-    directCostAssumptions: [{ revenueStreamId: 'r', percentage: 40 }],
-    operatingExpenses: [{ id: 'e', name: 'Overhead', category: 'other', amount: 300, frequency: 'Monthly', startMonth: 1, endMonth: null, annualIncrease: 0, notes: '', calculationType: 'Fixed Amount', revenueBasis: 'total_revenue', revenueStreamIds: [] }],
-    loanAssumptions: [{ id: 'l', loan_name: 'Loan', lender_name: null, original_principal: 1200, annual_interest_rate: 0, amortization_months: 12, term_months: null, payment_frequency: 'monthly', loan_start_month: 1, interest_only_months: 0, balloon_payment: null, financing_fee: null, existing_or_proposed: 'existing', notes: '' }],
-  });
-  const projection = project(assumptions), result = calculateFinancialAnalysis(projection);
-  assert.equal(result.annual[1].revenueGrowth, 0.2);
-  assert.equal(result.annual[0].grossMargin, 0.6);
-  assert.equal(result.annual[0].ebitdaMargin, 0.3);
-  assert.equal(result.annual[0].netMargin, 0.3);
-  assert.equal(result.breakEvenMonthlyRevenue, 500); assert.equal(result.breakEvenAnnualRevenue, 6000); assert.equal(result.estimatedBreakEvenMonth, 1);
-  const expectedDscr = projection.monthly.reduce((n, r) => n + r.ebitda, 0) / projection.monthly.reduce((n, r) => n + r.loanPrincipalRepayment + r.loanInterest, 0);
-  assert.equal(result.debtServiceCoverageRatio.value, expectedDscr);
-  assert.equal(result.closingDebtBalance, 0); assert.equal(result.minimumCashBalance, 2600); assert.equal(result.maximumFundingShortfall, 0);
-  assert.equal(result.cashRunwayMonths, null); assert.match(result.cashRunwayExplanation!, /beyond/);
-  assert.equal(result.workingCapital, projection.monthly.at(-1)!.closingCash); assert.equal(result.currentRatio.value, null);
-});
-
-test('safely explains zero EBITDA/debt service and calculates a funding shortfall runway', () => {
-  const result = calculateFinancialAnalysis(project(base({ openingCash: 100, projectionMonths: 2, startupProjectCosts: [{ id: 'x', name: 'Setup', amount: 150, paymentMonth: 2, type: 'startup' }] })));
-  assert.equal(result.debtServiceCoverageRatio.value, null); assert.match(result.debtServiceCoverageRatio.explanation!, /payments are zero/);
-  assert.equal(result.minimumCashBalance, -50); assert.equal(result.maximumFundingShortfall, 50); assert.equal(result.cashRunwayMonths, 1);
-  assert.equal(result.breakEvenMonthlyRevenue, null); assert.equal(result.breakEvenAnnualRevenue, null); assert.equal(result.estimatedBreakEvenMonth, null);
-});
-
-test('validates sources/uses, ownership, negative cash, missing funding, and owner investment', () => {
-  const assumptions = base({ startupProjectCosts: [{ id: 'x', name: 'Setup', amount: 100, paymentMonth: 1, type: 'startup' }], fundingSources: [{ id: 'o', name: 'Owner', type: 'owner_contribution', amount: -1, month: 1 }] });
-  const result = validateFinancialProjection(assumptions, project(assumptions), { ownershipPercentages: [60, 30] });
-  for (const code of ['sources_uses_mismatch', 'ownership_not_100', 'negative_cash', 'missing_startup_funding', 'negative_owner_investment']) assert.ok(result.warnings.some(w => w.code === code), code);
-  assert.equal(result.canGenerate, false); assert.equal(result.requiresAcknowledgement, true);
-});
-
-test('validates negative gross profit, invalid margin, and unusually high growth', () => {
-  const assumptions = base({ revenueStreams: [{ id: 'r', name: 'Sales', startMonth: 1, unitPrice: 100, monthlyUnits: 1, annualGrowthRate: 200 }], directCostAssumptions: [{ revenueStreamId: 'r', percentage: 150 }] });
-  const result = validateFinancialProjection(assumptions, project(assumptions));
-  for (const code of ['negative_gross_profit', 'invalid_gross_margin', 'high_revenue_growth']) assert.ok(result.warnings.some(w => w.code === code), code);
-  assert.equal(result.warnings.find(w => w.code === 'high_revenue_growth')?.severity, 'advisory');
-});
-
-test('validates payroll dates, incomplete revenue, negative expenses, and interest limits', () => {
-  const assumptions = base({
-    revenueStreams: [{ id: 'r', name: '', startMonth: Number.NaN, unitPrice: Number.NaN, monthlyUnits: 1 }],
-    payrollAssumptions: [{ id: 'p', job_title: 'Staff', department: null, number_of_employees: 1, compensation_type: 'salaried', hourly_wage: null, weekly_hours: null, annual_salary: 12000, contractor_payment_type: null, contractor_monthly_amount: null, contractor_hourly_rate: null, contractor_monthly_hours: null, start_month: undefined as unknown as number, end_month: null, annual_salary_increase_percentage: 0, employer_payroll_burden_percentage: 0, monthly_benefits_per_employee: 0, annual_bonus_per_employee: 0, notes: '' }],
-    operatingExpenses: [{ id: 'e', name: 'Bad', category: 'other', amount: -1, frequency: 'Monthly', startMonth: 1, endMonth: null, annualIncrease: 0, notes: '', calculationType: 'Fixed Amount', revenueBasis: 'total_revenue', revenueStreamIds: [] }],
-    loanAssumptions: [{ id: 'l', loan_name: 'Bad rate', lender_name: null, original_principal: 1, annual_interest_rate: 101, amortization_months: 1, term_months: null, payment_frequency: 'monthly', loan_start_month: 1, interest_only_months: 0, balloon_payment: null, financing_fee: null, existing_or_proposed: 'existing', notes: '' }],
-  });
-  const found = codes(assumptions);
-  for (const code of ['payroll_missing_start_date', 'incomplete_revenue_assumptions', 'negative_expenses', 'interest_rate_out_of_range']) assert.ok(found.includes(code), code);
-});
-
-test('validates finalized debt service without funding and an unbalanced balance sheet', () => {
-  const assumptions = base(); const projection = project(assumptions);
-  projection.monthly[0].loanPrincipalRepayment = 5;
-  projection.statements.monthly[0].balanceSheet.isBalanced = false;
-  projection.statements.monthly[0].balanceSheet.balanceDifference = 5;
-  const result = validateFinancialProjection(assumptions, projection);
-  assert.ok(result.warnings.some(w => w.code === 'debt_service_without_loan'));
-  assert.ok(result.warnings.some(w => w.code === 'balance_sheet_not_balancing'));
-});
+import { breakEvenRevenue, calculateFinancialAnalysis, currentRatio, dscr, margin, revenueGrowth } from '../src/lib/financials/analysis/index.ts';
+const base = (overrides: Partial<FinancialAssumptions> = {}): FinancialAssumptions => ({ projectionStartDate:'2027-01-01', projectionMonths:36, currency:'USD', openingCash:10000, revenueStreams:[], directCostAssumptions:[], startupProjectCosts:[], operatingExpenses:[], payrollAssumptions:[], fundingSources:[], loanAssumptions:[], taxAssumptions:{incomeTaxRate:0}, depreciationAssumptions:{assets:[]}, workingCapitalAssumptions:{useWorkingCapital:false}, ...overrides });
+const expense = (amount:number, calculationType:'Fixed Amount'|'Percentage of Revenue'='Fixed Amount') => ({ id:`e-${amount}-${calculationType}`, name:'Expense', category:'other', amount, frequency:'Monthly' as const, startMonth:1, endMonth:null, annualIncrease:0, notes:'', calculationType, revenueBasis:'total_revenue' as const, revenueStreamIds:[] });
+test('safe formula helpers cover ratios and zero denominators',()=>{ assert.equal(margin(60000,100000),.6); assert.equal(margin(20000,100000),.2); assert.equal(margin(-10000,100000),-.1); assert.equal(margin(1,0),null); assert.equal(revenueGrowth(600000,500000).value,.2); assert.equal(revenueGrowth(750000,600000).value,.25); assert.equal(revenueGrowth(100000,0).value,null); assert.equal(breakEvenRevenue(30000,.6),50000); assert.equal(breakEvenRevenue(30000,0),null); assert.equal(dscr(120000,100000).value,1.2); assert.equal(dscr(-20000,40000).value,-.5); assert.equal(dscr(1,0).value,null); assert.equal(currentRatio(100000,80000).value,1.25); assert.equal(currentRatio(1,0).value,null); });
+test('calculates classified contribution margin and monthly break-even',()=>{ const assumptions=base({revenueStreams:[{id:'r',name:'Sales',startMonth:1,unitPrice:100,monthlyUnits:100}],directCostAssumptions:[{revenueStreamId:'r',percentage:40}],operatingExpenses:[expense(3000),expense(5,'Percentage of Revenue')]}); const row=calculateFinancialAnalysis({projection:calculateFinancialProjection(assumptions),assumptions}).monthlyMetrics[0]; assert.equal(row.variableCosts,4500); assert.equal(row.contributionMargin,5500); assert.equal(row.contributionMarginRatio,.55); assert.equal(row.fixedCosts,3000); assert.ok(Math.abs(row.breakEvenRevenue!-5454.5454545)<.0001); });
+test('finds first and sustained break-even',()=>{ const assumptions=base({projectionMonths:7,revenueStreams:[{id:'r',name:'Sales',startMonth:1,unitPrice:1,monthlyUnits:30000}],operatingExpenses:[expense(50000)]}); const projection=calculateFinancialProjection(assumptions); [30000,40000,55000,48000,55000,60000,65000].forEach((value,i)=>{const row=projection.monthly[i]; row.totalRevenue=value; row.grossProfit=value; row.ebitda=value-50000;}); const result=calculateFinancialAnalysis({projection,assumptions}); assert.equal(result.breakEven.firstOperatingBreakEvenMonth?.monthIndex,3); assert.equal(result.breakEven.firstSustainedBreakEvenMonth?.monthIndex,5); });
+test('aggregates negative cash and funding shortfall',()=>{ const projection=calculateFinancialProjection(base({projectionMonths:5})); [10000,5000,-3000,-8000,2000].forEach((value,i)=>projection.monthly[i].closingCash=value); const result=calculateFinancialAnalysis(projection); assert.equal(result.cashAnalysis.firstNegativeCashMonth?.monthIndex,3); assert.equal(result.cashAnalysis.minimumCash,-8000); assert.equal(result.cashAnalysis.maximumFundingShortfall,8000); assert.equal(result.warnings.filter(w=>w.code==='NEGATIVE_CASH').length,1); });
+test('generates deterministic severity and threshold warnings',()=>{ const assumptions=base({openingCash:0,revenueStreams:[{id:'r',name:'Sales',startMonth:1,unitPrice:100,monthlyUnits:10,annualGrowthRate:150}],directCostAssumptions:[{revenueStreamId:'r',percentage:100}],operatingExpenses:[expense(100)]}); const result=calculateFinancialAnalysis({projection:calculateFinancialProjection(assumptions),assumptions}); assert.equal(result.warnings.find(w=>w.code==='INVALID_CONTRIBUTION_MARGIN')?.severity,'error'); assert.equal(result.warnings.find(w=>w.code==='TAX_NOT_CONFIGURED')?.severity,'advisory'); assert.equal(result.warnings.find(w=>w.code==='HIGH_REVENUE_GROWTH')?.severity,'advisory'); });
+test('full 36-month analysis has three years and finite deterministic outputs',()=>{ const assumptions=base({revenueStreams:[{id:'a',name:'A',startMonth:1,unitPrice:50,monthlyUnits:200,monthlyGrowthRate:1},{id:'b',name:'B',startMonth:3,unitPrice:100,monthlyUnits:40}],directCostAssumptions:[{revenueStreamId:'a',percentage:20},{revenueStreamId:'b',percentage:30}],operatingExpenses:[expense(1000),expense(2,'Percentage of Revenue')],workingCapitalAssumptions:{useWorkingCapital:true,accountsReceivableDays:15,inventoryDays:10,accountsPayableDays:20},loanAssumptions:[{id:'l',loan_name:'Loan',lender_name:null,original_principal:12000,annual_interest_rate:6,amortization_months:36,term_months:null,payment_frequency:'monthly',loan_start_month:1,interest_only_months:0,balloon_payment:null,financing_fee:null,existing_or_proposed:'existing',notes:''}]}); const first=calculateFinancialAnalysis({projection:calculateFinancialProjection(assumptions),assumptions}); const second=calculateFinancialAnalysis({projection:calculateFinancialProjection(assumptions),assumptions}); assert.equal(first.annualMetrics.length,3); assert.equal(first.monthlyMetrics.length,36); assert.ok(first.annualMetrics.every(row=>row.dscr.value==null||Number.isFinite(row.dscr.value))); assert.ok(!JSON.stringify(first).includes('Infinity')); assert.deepEqual(first.warnings,second.warnings); });

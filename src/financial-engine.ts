@@ -1,4 +1,4 @@
-import { calculatePayroll, type StaffingPosition } from './payroll.ts';
+import { calculatePayroll, type StaffingPositionInput } from './payroll.ts';
 import { calculateOperatingExpenses, type OperatingExpense } from './operating-expenses.ts';
 import { calculateDebtService, type Loan } from './loans.ts';
 import { buildFinancialStatements, type FinancialStatements, type FinancialStatementPeriod, type IncomeStatement, type CashFlowStatement, type BalanceSheet } from './lib/financials/statements/index.ts';
@@ -41,7 +41,7 @@ export interface FinancialProjectionAssumptions {
   directCostAssumptions: DirectCostAssumption[];
   startupProjectCosts: ProjectCostAssumption[];
   operatingExpenses: OperatingExpense[];
-  payrollAssumptions: StaffingPosition[];
+  payrollAssumptions: StaffingPositionInput[];
   fundingSources: FundingSourceAssumption[];
   loanAssumptions: Loan[];
   taxAssumptions: TaxAssumptions;
@@ -62,6 +62,7 @@ export interface MonthlyFinancialResult {
   month: number; date: string; revenueByStream: RevenueStreamResult[]; totalRevenue: number;
   directCostByRevenueStream: DirectCostResult[]; totalCostOfSales: number; grossProfit: number; grossMargin: number;
   payroll: number; operatingExpenses: number; totalOperatingExpenses: number;
+  fixedOperatingExpenses: number; revenueBasedOperatingExpenses: number;
   ebitda: number; depreciationAndAmortization: number; ebit: number; interestExpense: number;
   earningsBeforeTax: number; incomeTax: number; netIncome: number;
   loanProceeds: number; loanPrincipalRepayment: number; loanInterest: number; endingLoanBalances: number;
@@ -180,6 +181,8 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const payrollRow = payroll[index];
     const payrollAmount = payrollRow?.total_payroll || 0;
     const operatingExpense = expenses[index] || 0;
+    const fixedOperatingExpenses = expenseProjection.fixedExpensesByMonth[index] || 0;
+    const revenueBasedOperatingExpenses = expenseProjection.revenueBasedExpensesByMonth[index] || 0;
     const expensedStartupCosts = assumptions.startupProjectCosts.filter(item => ['startup', 'project', 'operating_expense', 'other'].includes(item.type) && item.paymentMonth === month).reduce((sum, item) => sum + item.amount, 0);
     const totalOperatingExpense = payrollAmount + operatingExpense + expensedStartupCosts;
     const ebitda = grossProfit - totalOperatingExpense;
@@ -240,7 +243,7 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const operatingCashFlow = cashReceipts - cashOperatingPayments - expensedStartupCosts - interest - taxesPaid;
     const investingCashFlow = -capitalExpenditures - deposits - openingInventoryPurchases;
     const financingCashFlow = financingInflows - principal - paidUpfrontFinancingFees;
-    return { month, date: monthDate(assumptions.projectionStartDate, index), ...monthInfo, revenueByStream: revenueRows, totalRevenue: totalRevenue[index], directCostByRevenueStream: directCostRows, directCostsByStream: directCostRows, totalCostOfSales: costOfSales, grossProfit, grossMargin: totalRevenue[index] ? grossProfit / totalRevenue[index] : 0, payroll: payrollAmount, operatingExpenses: operatingExpense, totalOperatingExpenses: totalOperatingExpense, totalOperatingCosts: totalOperatingExpense,
+    return { month, date: monthDate(assumptions.projectionStartDate, index), ...monthInfo, revenueByStream: revenueRows, totalRevenue: totalRevenue[index], directCostByRevenueStream: directCostRows, directCostsByStream: directCostRows, totalCostOfSales: costOfSales, grossProfit, grossMargin: totalRevenue[index] ? grossProfit / totalRevenue[index] : 0, payroll: payrollAmount, operatingExpenses: operatingExpense, totalOperatingExpenses: totalOperatingExpense, totalOperatingCosts: totalOperatingExpense, fixedOperatingExpenses, revenueBasedOperatingExpenses,
       payrollAndStaffing: { baseCompensation: staffingSum('base_compensation'), employerPayrollCosts: staffingSum('employer_payroll_cost'), benefits: staffingSum('benefits'), bonuses: staffingSum('bonuses'), contractorCosts: staffingSum('contractor_cost'), totalStaffingCost: payrollAmount },
       ebitda, depreciationAndAmortization: depreciation, depreciation, amortization: 0, ebit, interestExpense: interest, earningsBeforeTax, incomeTax, incomeTaxExpense: incomeTax, netIncome: earningsBeforeTax - incomeTax, loanProceeds, loanPrincipalRepayment: principal, loanInterest: interest, endingLoanBalances: debtRow?.closing_balance || 0, endingDebtBalance: debtRow?.closing_balance || 0, ownerContributions, investorContributions, otherFunding, otherFinancingInflows: otherFunding, balloonPayments: debtRow?.balloon_payment || 0, financingFees: debtRow?.financing_fee || 0,
       cashReceipts, cashOperatingPayments, startupProjectCostPayments: startupPayments, expensedStartupCosts, deposits, openingInventoryPurchases, capitalExpenditures, financingInflows, debtRepayments, taxesPaid, netCashMovement, openingCash, closingCash: cash, operatingCashFlow, investingCashFlow, financingCashFlow,
