@@ -32,6 +32,10 @@ export function projectFinancials({ price = 85, units = 120, growth = 0.04, dire
   let previousPayables = 0;
 
   return Array.from({ length: 36 }, (_, index) => {
+    // Expense assumptions may vary by month (for example quarterly or
+    // revenue-based operating expenses), while legacy callers may pass one
+    // recurring scalar value.
+    const monthlyExpenses = number(Array.isArray(expenses) ? expenses[index] : expenses);
     const streamResults = streams.map((stream, streamIndex) => {
       const seasonalFactor = 1 + number(stream.seasonal) / 100;
       const annualPriceFactor = Math.pow(1 + number(stream.annualPriceIncrease) / 100, Math.floor(index / 12));
@@ -42,7 +46,7 @@ export function projectFinancials({ price = 85, units = 120, growth = 0.04, dire
     const revenue = streamResults.reduce((sum, stream) => sum + stream.revenue, 0);
     const cost = streamResults.reduce((sum, stream) => sum + stream.cost, 0);
     const grossProfit = revenue - cost;
-    const ebitda = grossProfit - number(expenses) - number(payroll);
+    const ebitda = grossProfit - monthlyExpenses - number(payroll);
     const depreciation = Math.min(monthlyDepreciation, Math.max(0, number(depreciableAssets) - monthlyDepreciation * index));
     const debtRow = debt[index] || { payment: 0, principal: 0, interest: 0, closingBalance: 0 };
     const taxableIncome = ebitda - depreciation - debtRow.interest;
@@ -57,7 +61,7 @@ export function projectFinancials({ price = 85, units = 120, growth = 0.04, dire
     cash += cashFlow;
     previousReceivables = receivables;
     previousPayables = payables;
-    return { month: index + 1, streams: streamResults, revenue, cost, grossProfit, payroll: number(payroll), expenses: number(expenses), ebitda, depreciation, interest: debtRow.interest, tax, netIncome, operatingCashFlow, principalPayment: debtRow.principal, ownerDraws: number(ownerDraws), cashFlow, closingCash: cash, receivables, inventory: number(inventory), payables, loanBalance: debtRow.closingBalance, fixedAssets: Math.max(0, number(depreciableAssets) - depreciation * (index + 1)), totalAssets: cash + receivables + number(inventory) + Math.max(0, number(depreciableAssets) - depreciation * (index + 1)), currentLiabilities: payables, equity: cash + receivables + number(inventory) + Math.max(0, number(depreciableAssets) - depreciation * (index + 1)) - payables - debtRow.closingBalance };
+    return { month: index + 1, streams: streamResults, revenue, cost, grossProfit, payroll: number(payroll), expenses: monthlyExpenses, ebitda, depreciation, interest: debtRow.interest, tax, netIncome, operatingCashFlow, principalPayment: debtRow.principal, ownerDraws: number(ownerDraws), cashFlow, closingCash: cash, receivables, inventory: number(inventory), payables, loanBalance: debtRow.closingBalance, fixedAssets: Math.max(0, number(depreciableAssets) - depreciation * (index + 1)), totalAssets: cash + receivables + number(inventory) + Math.max(0, number(depreciableAssets) - depreciation * (index + 1)), currentLiabilities: payables, equity: cash + receivables + number(inventory) + Math.max(0, number(depreciableAssets) - depreciation * (index + 1)) - payables - debtRow.closingBalance };
   });
 }
 
