@@ -6,6 +6,8 @@ export const BUSINESS_PLAN_SECTIONS = [
   ['funding_request','Funding Request & Use of Funds'],['financial_projections','Financial Projections & Financial Position'],
   ['risk_analysis','Risk Analysis'],['executive_summary','Executive Summary']
 ] as const;
+/** Report/editor order. Generation intentionally keeps Executive Summary last. */
+export const BUSINESS_PLAN_EDITOR_SECTIONS = [BUSINESS_PLAN_SECTIONS.at(-1)!, ...BUSINESS_PLAN_SECTIONS.slice(0,-1)] as typeof BUSINESS_PLAN_SECTIONS[number][];
 export type SectionKey = typeof BUSINESS_PLAN_SECTIONS[number][0];
 export type SectionStatus = 'not_generated'|'ready'|'generating'|'generated'|'edited'|'approved'|'outdated'|'error';
 export type PlanGenerationStatus = 'not_started'|'ready'|'partially_generated'|'generated'|'requires_update';

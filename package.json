@@ -11,7 +11,7 @@
     "test:integration": "node --test test/business-plan-generation.integration.test.ts",
     "type-check": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --pretty false",
-    "migration:check": "node -e \"const fs=require('fs');const sql=fs.readFileSync('migrations/20260812040000_create_business_plan_generation.sql','utf8');for(const name of ['business_plan_sections','business_plan_section_versions','ai_usage_events'])if(!sql.includes(name))throw Error('missing '+name)\""
+    "migration:check": "node -e \"const fs=require('fs');const base=fs.readFileSync('migrations/20260812040000_create_business_plan_generation.sql','utf8'),editor=fs.readFileSync('migrations/20260812050000_business_plan_editor_workflow.sql','utf8');for(const name of ['business_plan_sections','business_plan_section_versions','ai_usage_events'])if(!base.includes(name))throw Error('missing '+name);for(const name of ['approved_by','approved_content_version_id','source_reviewed_at','revision'])if(!editor.includes(name))throw Error('missing '+name)\""
   },
   "dependencies": {
     "vite": "latest",
