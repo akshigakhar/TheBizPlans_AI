@@ -4,10 +4,11 @@
 // still enforced by Row Level Security.
 const defaultSupabaseUrl = 'https://bfokmiteswljdgjjvxtt.supabase.co';
 const defaultPublishableKey = 'sb_publishable_c5qHrVsPgUc9I3In4IwL2g_fvMrOJ28';
+const env = (import.meta as any).env || {};
 
 export const supabaseUrl = (
-  (import.meta as any).env?.VITE_SUPABASE_URL || defaultSupabaseUrl
+  env.VITE_SUPABASE_URL || defaultSupabaseUrl
 ).replace(/\/$/, '');
 
 export const supabasePublishableKey =
-  (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY || defaultPublishableKey;
+  env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY || defaultPublishableKey;
