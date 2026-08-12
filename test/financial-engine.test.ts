@@ -109,3 +109,49 @@ test('classifies the next twelve months of principal as current debt', () => {
   assert.equal(yearOne.longTermDebt, 1200);
   assert.equal(yearOne.currentPortionOfDebt + yearOne.longTermDebt, projection.monthly[11].endingLoanBalances);
 });
+
+test('calculates monthly working-capital balances, changes, and cash impact from days', () => {
+  const rows = calculateFinancialProjection(base({ projectionMonths: 2,
+    revenueStreams: [{ id: 'sales', name: 'Sales', startMonth: 1, unitPrice: 300, monthlyUnits: 1, monthlyGrowthRate: 100 }],
+    directCostAssumptions: [{ revenueStreamId: 'sales', percentage: 50 }],
+    workingCapitalAssumptions: { accountsReceivableDays: 15, inventoryDays: 10, accountsPayableDays: 20 },
+  })).monthly;
+  assert.deepEqual([rows[0].accountsReceivable, rows[0].inventory, rows[0].accountsPayable], [150, 50, 100]);
+  assert.deepEqual([rows[1].changeInAccountsReceivable, rows[1].changeInInventory, rows[1].changeInAccountsPayable], [150, 50, 100]);
+  assert.equal(rows[0].workingCapitalCashFlowImpact, -100);
+  assert.equal(rows[1].workingCapitalCashFlowImpact, -100);
+});
+
+test('supports minimum inventory and percentage fallbacks when days are omitted', () => {
+  const row = calculateFinancialProjection(base({ projectionMonths: 1,
+    revenueStreams: [{ id: 'sales', name: 'Sales', startMonth: 1, unitPrice: 1000, monthlyUnits: 1 }],
+    directCostAssumptions: [{ revenueStreamId: 'sales', percentage: 40 }],
+    workingCapitalAssumptions: { accountsReceivablePercentage: 25, inventoryPercentage: 10, accountsPayablePercentage: 50, minimumInventoryBalance: 75 },
+  })).monthly[0];
+  assert.equal(row.accountsReceivable, 250);
+  assert.equal(row.inventory, 75);
+  assert.equal(row.accountsPayable, 200);
+  assert.equal(row.workingCapitalCashFlowImpact, -125);
+});
+
+test('records an asset purchase as investing cash flow without expensing its full cost', () => {
+  const projection = calculateFinancialProjection(base({ projectionMonths: 1, openingCash: 1000,
+    depreciationAssumptions: { assets: [{ id: 'press', name: 'Press', category: 'Equipment', purchaseAmount: 600, purchaseMonth: 1, usefulLifeMonths: 60, residualValue: 0, depreciationMethod: 'straight_line' }] },
+  }));
+  const row = projection.monthly[0];
+  assert.equal(row.assetPurchases, 600);
+  assert.equal(row.capitalExpenditures, 600);
+  assert.equal(row.operatingExpenses, 0);
+  assert.equal(row.depreciationAndAmortization, 10);
+  assert.equal(projection.statements.monthly[0].cashFlowStatement.cashFlowFromInvestingActivities, -600);
+  assert.equal(projection.statements.monthly[0].balanceSheet.netFixedAssets, 590);
+});
+
+test('starts straight-line depreciation in the purchase month and stops at residual value', () => {
+  const rows = calculateFinancialProjection(base({ projectionMonths: 5,
+    depreciationAssumptions: { assets: [{ id: 'vehicle', name: 'Vehicle', category: 'Vehicles', purchaseAmount: 500, purchaseMonth: 2, usefulLifeMonths: 3, residualValue: 200, depreciationMethod: 'straight_line' }] },
+  })).monthly;
+  assert.deepEqual(rows.map(row => row.depreciationAndAmortization), [0, 100, 100, 100, 0]);
+  assert.deepEqual(rows.map(row => row.accumulatedDepreciation), [0, 100, 200, 300, 300]);
+  assert.deepEqual(rows.map(row => row.netBookValue), [0, 400, 300, 200, 200]);
+});

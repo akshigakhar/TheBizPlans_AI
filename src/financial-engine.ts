@@ -11,10 +11,23 @@ export interface DirectCostAssumption { revenueStreamId: string; percentage?: nu
 export type ProjectCostType = 'startup' | 'project' | 'capital_expenditure';
 export interface ProjectCostAssumption { id: string; name: string; amount: number; paymentMonth: number; type: ProjectCostType }
 export interface FundingSourceAssumption { id: string; name: string; type: 'owner_contribution' | 'other'; amount: number; month: number }
-export interface DepreciableAssetAssumption { id: string; name: string; cost: number; inServiceMonth: number; usefulLifeMonths: number; salvageValue?: number }
+export type DepreciationMethod = 'straight_line';
+export interface DepreciableAssetAssumption {
+  id: string; name: string; category?: string;
+  purchaseAmount?: number; purchaseMonth?: number; usefulLifeMonths: number;
+  residualValue?: number; depreciationMethod?: DepreciationMethod;
+  /** Legacy aliases retained for existing saved projections. */
+  cost?: number; inServiceMonth?: number; salvageValue?: number;
+}
 export interface TaxAssumptions { incomeTaxRate: number; paymentLagMonths?: number }
 export interface DepreciationAssumptions { assets: DepreciableAssetAssumption[] }
-export interface WorkingCapitalAssumptions { receivableDays?: number; payableDays?: number; inventoryByMonth?: number[] }
+export interface WorkingCapitalAssumptions {
+  accountsReceivableDays?: number; inventoryDays?: number; accountsPayableDays?: number;
+  minimumInventoryBalance?: number;
+  accountsReceivablePercentage?: number; inventoryPercentage?: number; accountsPayablePercentage?: number;
+  /** Legacy inputs retained for existing saved projections. */
+  receivableDays?: number; payableDays?: number; inventoryByMonth?: number[];
+}
 
 /** Normalized user inputs only. Calculated values must not be stored on this object. */
 export interface FinancialAssumptions {
@@ -45,6 +58,9 @@ export interface MonthlyFinancialResult {
   capitalExpenditures: number; financingInflows: number; debtRepayments: number; taxesPaid: number;
   netCashMovement: number; openingCash: number; closingCash: number;
   accountsReceivable: number; accountsPayable: number; inventory: number;
+  changeInAccountsReceivable: number; changeInInventory: number; changeInAccountsPayable: number;
+  workingCapitalCashFlowImpact: number;
+  assetPurchases: number; accumulatedDepreciation: number; netBookValue: number;
 }
 export interface IncomeStatement { revenue: number; costOfSales: number; grossProfit: number; grossMargin: number; payroll: number; operatingExpenses: number; ebitda: number; depreciationAndAmortization: number; ebit: number; interestExpense: number; incomeBeforeTax: number; incomeTax: number; netIncome: number }
 export interface CashFlowStatement { cashFlowFromOperatingActivities: number; cashFlowFromInvestingActivities: number; cashFlowFromFinancingActivities: number; netChangeInCash: number; openingCash: number; closingCash: number }
@@ -82,6 +98,15 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
   const expenses = calculateOperatingExpenses(assumptions.operatingExpenses, length, totalRevenue, streamForecasts).monthly;
   const debt = calculateDebtService(assumptions.loanAssumptions, length);
   const taxAccruals: number[] = [];
+  const assets = assumptions.depreciationAssumptions.assets.map(asset => {
+    const purchaseAmount = nonnegative(asset.purchaseAmount ?? asset.cost);
+    const purchaseMonth = Math.max(1, Math.trunc(nonnegative(asset.purchaseMonth ?? asset.inServiceMonth)) || 1);
+    const residualValue = nonnegative(asset.residualValue ?? asset.salvageValue);
+    if (asset.depreciationMethod && asset.depreciationMethod !== 'straight_line') throw new RangeError(`Unsupported depreciation method: ${asset.depreciationMethod}`);
+    if (residualValue > purchaseAmount) throw new RangeError(`Asset ${asset.name} has a residual value greater than its purchase amount.`);
+    if (!Number.isInteger(asset.usefulLifeMonths) || asset.usefulLifeMonths < 1) throw new RangeError(`Asset ${asset.name} must have a positive whole-number useful life.`);
+    return { ...asset, purchaseAmount, purchaseMonth, residualValue };
+  });
   let cash = finite(assumptions.openingCash), previousReceivables = 0, previousPayables = 0, previousInventory = 0;
 
   const monthly = Array.from({ length }, (_, index): MonthlyFinancialResult => {
@@ -99,9 +124,9 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const operatingExpense = expenses[index] || 0;
     const totalOperatingExpense = payrollAmount + operatingExpense;
     const ebitda = grossProfit - totalOperatingExpense;
-    const depreciation = assumptions.depreciationAssumptions.assets.reduce((sum, asset) => {
-      const elapsed = month - asset.inServiceMonth;
-      return sum + (elapsed >= 0 && elapsed < asset.usefulLifeMonths ? Math.max(0, asset.cost - finite(asset.salvageValue)) / Math.max(1, asset.usefulLifeMonths) : 0);
+    const depreciation = assets.reduce((sum, asset) => {
+      const elapsed = month - asset.purchaseMonth;
+      return sum + (elapsed >= 0 && elapsed < asset.usefulLifeMonths ? (asset.purchaseAmount - asset.residualValue) / asset.usefulLifeMonths : 0);
     }, 0);
     const debtRow = debt.monthly[index];
     const interest = debtRow?.interest_expense || 0;
@@ -113,12 +138,22 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const ownerContributions = assumptions.fundingSources.filter(item => item.type === 'owner_contribution' && item.month === month).reduce((sum, item) => sum + item.amount, 0);
     const otherFunding = assumptions.fundingSources.filter(item => item.type === 'other' && item.month === month).reduce((sum, item) => sum + item.amount, 0);
     const startupPayments = assumptions.startupProjectCosts.filter(item => item.type !== 'capital_expenditure' && item.paymentMonth === month).reduce((sum, item) => sum + item.amount, 0);
-    const capitalExpenditures = assumptions.startupProjectCosts.filter(item => item.type === 'capital_expenditure' && item.paymentMonth === month).reduce((sum, item) => sum + item.amount, 0);
-    const receivables = totalRevenue[index] * nonnegative(assumptions.workingCapitalAssumptions.receivableDays) / 30;
-    const payables = costOfSales * nonnegative(assumptions.workingCapitalAssumptions.payableDays) / 30;
-    const inventory = nonnegative(assumptions.workingCapitalAssumptions.inventoryByMonth?.[index]);
-    const cashReceipts = totalRevenue[index] - (receivables - previousReceivables);
-    const cashOperatingPayments = costOfSales + totalOperatingExpense - (payables - previousPayables) + (inventory - previousInventory);
+    const legacyCapitalCosts = assumptions.startupProjectCosts.filter(item => item.type === 'capital_expenditure' && item.paymentMonth === month && !assets.some(asset => asset.id === item.id)).reduce((sum, item) => sum + item.amount, 0);
+    const assetPurchases = assets.filter(asset => asset.purchaseMonth === month).reduce((sum, asset) => sum + asset.purchaseAmount, 0);
+    const capitalExpenditures = legacyCapitalCosts + assetPurchases;
+    const wc = assumptions.workingCapitalAssumptions;
+    const receivableDays = wc.accountsReceivableDays ?? wc.receivableDays;
+    const payableDays = wc.accountsPayableDays ?? wc.payableDays;
+    const receivables = receivableDays !== undefined ? totalRevenue[index] * nonnegative(receivableDays) / 30 : totalRevenue[index] * nonnegative(wc.accountsReceivablePercentage) / 100;
+    const payables = payableDays !== undefined ? costOfSales * nonnegative(payableDays) / 30 : costOfSales * nonnegative(wc.accountsPayablePercentage) / 100;
+    const calculatedInventory = wc.inventoryByMonth?.[index] ?? (wc.inventoryDays !== undefined ? costOfSales * nonnegative(wc.inventoryDays) / 30 : costOfSales * nonnegative(wc.inventoryPercentage) / 100);
+    const inventory = Math.max(nonnegative(calculatedInventory), nonnegative(wc.minimumInventoryBalance));
+    const changeInAccountsReceivable = receivables - previousReceivables;
+    const changeInAccountsPayable = payables - previousPayables;
+    const changeInInventory = inventory - previousInventory;
+    const workingCapitalCashFlowImpact = changeInAccountsPayable - changeInAccountsReceivable - changeInInventory;
+    const cashReceipts = totalRevenue[index] - changeInAccountsReceivable;
+    const cashOperatingPayments = costOfSales + totalOperatingExpense - changeInAccountsPayable + changeInInventory;
     const principal = (debtRow?.principal_repayment || 0) + (debtRow?.balloon_payment || 0);
     const debtRepayments = principal + interest + (debtRow?.financing_fee || 0);
     const taxesPaid = taxAccruals[index - Math.max(0, Math.trunc(finite(assumptions.taxAssumptions.paymentLagMonths)))] || 0;
@@ -126,7 +161,14 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const netCashMovement = cashReceipts - cashOperatingPayments - startupPayments - capitalExpenditures + financingInflows - debtRepayments - taxesPaid;
     const openingCash = cash; cash += netCashMovement;
     previousReceivables = receivables; previousPayables = payables; previousInventory = inventory;
-    return { month, date: monthDate(assumptions.projectionStartDate, index), revenueByStream: revenueRows, totalRevenue: totalRevenue[index], directCostByRevenueStream: directCostRows, totalCostOfSales: costOfSales, grossProfit, grossMargin: totalRevenue[index] ? grossProfit / totalRevenue[index] : 0, payroll: payrollAmount, operatingExpenses: operatingExpense, totalOperatingExpenses: totalOperatingExpense, ebitda, depreciationAndAmortization: depreciation, ebit, interestExpense: interest, earningsBeforeTax, incomeTax, netIncome: earningsBeforeTax - incomeTax, loanProceeds, loanPrincipalRepayment: principal, loanInterest: interest, endingLoanBalances: debtRow?.closing_balance || 0, ownerContributions, otherFunding, cashReceipts, cashOperatingPayments, startupProjectCostPayments: startupPayments, capitalExpenditures, financingInflows, debtRepayments, taxesPaid, netCashMovement, openingCash, closingCash: cash, accountsReceivable: receivables, accountsPayable: payables, inventory };
+    const accumulatedDepreciation = assets.reduce((sum, asset) => {
+      const elapsedMonths = Math.min(asset.usefulLifeMonths, Math.max(0, month - asset.purchaseMonth + 1));
+      return sum + (asset.purchaseAmount - asset.residualValue) / asset.usefulLifeMonths * elapsedMonths;
+    }, 0);
+    const purchasedAssetCost = assets.filter(asset => asset.purchaseMonth <= month).reduce((sum, asset) => sum + asset.purchaseAmount, 0);
+    const legacyAssetCost = assumptions.startupProjectCosts.filter(item => item.type === 'capital_expenditure' && item.paymentMonth <= month && !assets.some(asset => asset.id === item.id)).reduce((sum, item) => sum + item.amount, 0);
+    const netBookValue = purchasedAssetCost + legacyAssetCost - accumulatedDepreciation;
+    return { month, date: monthDate(assumptions.projectionStartDate, index), revenueByStream: revenueRows, totalRevenue: totalRevenue[index], directCostByRevenueStream: directCostRows, totalCostOfSales: costOfSales, grossProfit, grossMargin: totalRevenue[index] ? grossProfit / totalRevenue[index] : 0, payroll: payrollAmount, operatingExpenses: operatingExpense, totalOperatingExpenses: totalOperatingExpense, ebitda, depreciationAndAmortization: depreciation, ebit, interestExpense: interest, earningsBeforeTax, incomeTax, netIncome: earningsBeforeTax - incomeTax, loanProceeds, loanPrincipalRepayment: principal, loanInterest: interest, endingLoanBalances: debtRow?.closing_balance || 0, ownerContributions, otherFunding, cashReceipts, cashOperatingPayments, startupProjectCostPayments: startupPayments, capitalExpenditures, financingInflows, debtRepayments, taxesPaid, netCashMovement, openingCash, closingCash: cash, accountsReceivable: receivables, accountsPayable: payables, inventory, changeInAccountsReceivable, changeInInventory, changeInAccountsPayable, workingCapitalCashFlowImpact, assetPurchases, accumulatedDepreciation, netBookValue };
   });
   return { projectionStartDate: assumptions.projectionStartDate, projectionMonths: length, currency: assumptions.currency, monthly, statements: buildFinancialStatements(monthly) };
 }
@@ -140,8 +182,7 @@ function buildFinancialStatements(rows: MonthlyFinancialResult[]): FinancialStat
     const operating = sum('cashReceipts') - sum('cashOperatingPayments') - sum('startupProjectCostPayments') - sum('loanInterest') - sum('taxesPaid');
     const investing = -sum('capitalExpenditures');
     const financing = sum('financingInflows') - sum('loanPrincipalRepayment');
-    const depreciation = rows.slice(0, endIndex + 1).reduce((total, row) => total + row.depreciationAndAmortization, 0);
-    const fixedAssets = rows.slice(0, endIndex + 1).reduce((total, row) => total + row.capitalExpenditures, 0) - depreciation;
+    const fixedAssets = end.netBookValue;
     const accrued = rows.slice(0, endIndex + 1).reduce((total, row) => total + row.incomeTax - row.taxesPaid, 0);
     const ownerContributions = rows[0].openingCash + rows.slice(0, endIndex + 1).reduce((total, row) => total + row.ownerContributions, 0);
     const retainedEarnings = rows.slice(0, endIndex + 1).reduce((total, row) => total + row.netIncome, 0);
