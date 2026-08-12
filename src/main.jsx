@@ -12,7 +12,6 @@ import { BusinessPlanEditorService, getCurrentSectionContent, MAX_SECTION_CHARAC
 import { BusinessPlanGenerationService, MemoryGenerationRepository } from './lib/business-plan/generation-service.ts';
 import { calculateLoanProjection, normalizeLoan, validateLoan, LOAN_TYPES } from './loans.ts';
 import { supabaseAuth } from './lib/supabase/auth-client.ts';
-import { businessPlansClient, planRowToForm } from './lib/supabase/business-plans-client.ts';
 import './styles.css';
 
 const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -34,11 +33,9 @@ function App() {
   const [form, setForm] = useState({ planName: 'Acme Studio — Growth Plan', businessName: 'Acme Creative Studio', country: 'United States', region: 'New York', city: 'Brooklyn', stage: 'Expansion', purpose: 'Bank or lender', projectionPeriod: '3 years (36 months)', currency: 'USD', description: 'A strategy and design studio helping growing organizations build clear brands and effective digital experiences.', problem: 'Growing businesses often lack consistent brand direction and an experienced, flexible creative team.', difference: 'Senior-level expertise, a focused process, and flexible project or retainer engagements.', shortGoals: 'Build recurring client revenue and hire a full-time designer.', longGoals: 'Become the trusted creative partner for growth-stage organizations across the United States.' });
   const update = (key, value) => setForm(f => ({ ...f, [key]: value }));
   const notify = msg => { setToast(msg); setTimeout(() => setToast(''), 2400); };
-  const loadPlans=async value=>{setPlansLoading(true);try{setPlans((await businessPlansClient.list(value)).map(displayPlan))}catch(error){notify(error instanceof Error?error.message:'Unable to load your plans.')}finally{setPlansLoading(false)}};
-  const createPlan = async () => { try { const row=await businessPlansClient.create(session,form);setPlans(p=>[displayPlan(row),...p]);setView('builder');notify('Plan saved to Supabase')} catch(error){notify(error instanceof Error?error.message:'Unable to create the plan.')} };
+  const createPlan = () => { setPlans(p => [{ id: Date.now(), name: form.planName || 'Untitled business plan', company: form.businessName || 'New business', stage: 'Draft', progress: 9, updated: 'Just now' }, ...p]); setView('builder'); };
   useEffect(()=>{let active=true;supabaseAuth.restoreSession().then(({session:value,recovery})=>{if(!active)return;setSession(value);if(recovery){setAuthMode('update');setView('signup')}else if(value)setView('dashboard')}).catch(error=>{if(active){setToast(error instanceof Error?error.message:'Unable to restore your session.');setView('signup')}}).finally(()=>active&&setAuthReady(true));return()=>{active=false}},[]);
   useEffect(()=>{if(authReady&&!session&&!['landing','signup'].includes(view))setView('signup')},[authReady,session,view]);
-  useEffect(()=>{if(session)loadPlans(session);else setPlans([])},[session?.access_token]);
   const signOut=async()=>{try{await supabaseAuth.signOut(session)}finally{setSession(null);setView('landing')}};
   if(!authReady)return <div className="auth-loading"><div className="generate-orb"><Lock size={25}/></div><p>Restoring your secure session…</p></div>;
   const activeView=session||['landing','signup'].includes(view)?view:'signup';
@@ -50,7 +47,7 @@ function App() {
       {!['landing','signup','dashboard'].includes(activeView) && <FlowTracker current={activeView === 'editor' ? 6 : flowView[activeView] ?? 0} />}
       {activeView === 'landing' && <Landing onStart={() => {setAuthMode('signup');setView('signup')}} onSignIn={() => {setAuthMode('signin');setView('signup')}} />}
       {activeView === 'signup' && <SignUp initialMode={authMode} session={session} onAuthenticated={value=>{setSession(value);setView('dashboard')}} onBack={signOut} />}
-      {activeView === 'dashboard' && <Dashboard plans={plans} loading={plansLoading} onCreate={() => setView('setup')} onOpen={plan=>{setForm(current=>({...current,...planRowToForm(plan.row)}));setView('builder')}} onDuplicate={async plan=>{try{const row=await businessPlansClient.create(session,{...planRowToForm(plan.row),planName:`${plan.name} (Copy)`});setPlans(current=>[displayPlan(row),...current]);notify('Plan duplicated')}catch(error){notify(error instanceof Error?error.message:'Unable to duplicate the plan.')}}} onDelete={async plan=>{try{await businessPlansClient.remove(session,plan.id);setPlans(current=>current.filter(item=>item.id!==plan.id));notify('Plan deleted')}catch(error){notify(error instanceof Error?error.message:'Unable to delete the plan.')}}} setView={setView} notify={notify} />}
+      {activeView === 'dashboard' && <Dashboard plans={plans} setPlans={setPlans} onCreate={() => setView('setup')} setView={setView} notify={notify} />}
       {activeView === 'setup' && <Setup form={form} update={update} onCancel={() => setView('dashboard')} onCreate={createPlan} />}
       {activeView === 'builder' && <Builder form={form} update={update} activeStep={activeStep} setActiveStep={setActiveStep} setView={setView} notify={notify} />}
       {activeView === 'financials' && <Financials setView={setView} currency={form.currency} onReviewChange={setFinancialReview} />}

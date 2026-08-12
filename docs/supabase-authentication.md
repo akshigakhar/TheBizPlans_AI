@@ -95,23 +95,3 @@ VITE_AUTH_REDIRECT_URL=https://the-biz-plans-ai-akshigakhars-projects.vercel.app
 
 Only the publishable key belongs in browser configuration. Never expose the
 service-role key, Google client secret, or SMTP password through `VITE_*`.
-
-## Logging in and saving a plan
-
-1. Deploy the current migrations with `supabase db push` from the linked project.
-   The plan table already permits authenticated owners to insert, read, and
-   update their rows. The owner-delete migration adds safe deletion support.
-2. Open the deployed application and select **Sign in**. Use email/password or
-   **Continue with Google**. Supabase users appear under **Authentication →
-   Users**, not in the `business_plans` table.
-3. After login, select **Create new plan**, complete the plan setup form, and
-   choose **Create plan**.
-4. The application writes the row to `public.business_plans` with the logged-in
-   user's UUID. Refreshing the dashboard reloads that user's rows from Supabase.
-   The table remains empty until a signed-in user creates their first plan.
-
-RLS derives access from the bearer token and restricts each user to their own
-rows. Do not manually enter `user_id` in Table Editor for normal application use.
-The current persistence slice stores the plan setup fields represented by
-`business_plans`; questionnaire and financial-detail persistence use their own
-domain tables and are separate integration work.
