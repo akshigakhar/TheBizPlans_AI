@@ -5,6 +5,7 @@ export type WorkerType = typeof WORKER_TYPES[number];
 export type CompensationType = typeof COMPENSATION_TYPES[number];
 
 export interface StaffingPositionInput {
+  [key: string]: unknown;
   id: string; position_title: string; department: string | null; worker_type: WorkerType;
   compensation_type: CompensationType; number_of_workers: number; hourly_rate: number | null;
   weekly_hours: number | null; annual_salary: number | null; monthly_contractor_amount: number | null;
@@ -38,7 +39,7 @@ const num = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) :
 const optional = (value: unknown) => value === '' || value == null ? null : num(value);
 
 /** Normalizes UI/database values and also accepts the legacy prototype field names. */
-export function normalizeStaffingPosition(raw: Partial<StaffingPositionInput> & Record<string, unknown>): StaffingPositionInput {
+export function normalizeStaffingPosition(raw: Partial<StaffingPositionInput>): StaffingPositionInput {
   const legacyType = String(raw.compensation_type || '');
   const contractor = legacyType === 'contractor';
   const unpaidOwner = legacyType === 'owner_unpaid';
@@ -62,7 +63,7 @@ export function normalizeStaffingPosition(raw: Partial<StaffingPositionInput> & 
   };
 }
 
-export function validateStaffingPosition(raw: Partial<StaffingPositionInput> & Record<string, unknown>, projectionMonths = 36): PayrollValidationError[] {
+export function validateStaffingPosition(raw: Partial<StaffingPositionInput>, projectionMonths = 36): PayrollValidationError[] {
   const p = normalizeStaffingPosition(raw), errors: PayrollValidationError[] = [];
   const add = (field: keyof StaffingPositionInput, message: string) => errors.push({ field, message });
   const supplied = (key: string, ...legacy: string[]) => [key, ...legacy].some(k => raw[k] !== '' && raw[k] != null && Number.isFinite(Number(raw[k])));
@@ -96,7 +97,7 @@ function baseCompensation(p: StaffingPositionInput, factor: number): number {
   return (p.monthly_contractor_amount || 0) * p.number_of_workers * factor;
 }
 
-export function calculatePositionMonthlyCost(raw: Partial<StaffingPositionInput> & Record<string, unknown>, monthIndex: number, projectionMonths = 36): StaffingMonthlyResult {
+export function calculatePositionMonthlyCost(raw: Partial<StaffingPositionInput>, monthIndex: number, projectionMonths = 36): StaffingMonthlyResult {
   const p = normalizeStaffingPosition(raw), active = p.is_active !== false && monthIndex >= p.start_month && monthIndex <= (p.end_month ?? projectionMonths);
   const count = active ? p.number_of_workers : 0, factor = Math.pow(1 + p.annual_compensation_increase_percentage / 100, Math.floor((monthIndex - 1) / 12));
   const calculated = active ? baseCompensation(p, factor) : 0, contractor_cost = p.worker_type === 'contractor' ? calculated : 0;
@@ -120,7 +121,7 @@ export function summarizePayrollByYear(results: readonly StaffingMonthlyResult[]
   });
 }
 
-export function calculatePayrollProjection({ positions, projectionMonths = 36 }: { positions: Array<Partial<StaffingPositionInput> & Record<string, unknown>>; projectionMonths?: number }): StaffingProjectionResult {
+export function calculatePayrollProjection({ positions, projectionMonths = 36 }: { positions: Array<Partial<StaffingPositionInput>>; projectionMonths?: number }): StaffingProjectionResult {
   const normalized = positions.map(normalizeStaffingPosition), monthly_results = normalized.flatMap(p => Array.from({ length: projectionMonths }, (_, i) => calculatePositionMonthlyCost(p, i + 1, projectionMonths)));
   const headcount = calculateHeadcountByMonth(monthly_results, projectionMonths), annual_summaries = summarizePayrollByYear(monthly_results, headcount, projectionMonths);
   const total = (fn: (r: StaffingMonthlyResult) => number) => monthly_results.reduce((a, r) => a + fn(r), 0);
@@ -129,4 +130,4 @@ export function calculatePayrollProjection({ positions, projectionMonths = 36 }:
   return { monthly_results, position_results: normalized.map(position => { const rows = monthly_results.filter(r => r.position_id === position.id); return { position, monthly: rows, annual_totals: Array.from({ length: Math.ceil(projectionMonths / 12) }, (_, y) => rows.slice(y * 12, y * 12 + 12).reduce((a, r) => a + r.total_cost, 0)) }; }), annual_summaries, department_summaries: summarizePayrollByDepartment(monthly_results), worker_type_summaries: { employee: total(r => r.worker_type === 'employee' ? r.total_cost : 0), owner: total(r => r.worker_type === 'owner' ? r.total_cost : 0), contractor: total(r => r.worker_type === 'contractor' ? r.total_cost : 0) }, totals, headcount, monthly, annual: annual_summaries, year_1_total: annual_summaries[0]?.total_staffing_cost || 0, year_2_total: annual_summaries[1]?.total_staffing_cost || 0, year_3_total: annual_summaries[2]?.total_staffing_cost || 0, headcount_by_year: annual_summaries.map(r => r.ending_headcount) };
 }
 
-export function calculatePayroll(positions: Array<Partial<StaffingPositionInput> & Record<string, unknown>>, projectionMonths = 36): StaffingProjectionResult { return calculatePayrollProjection({ positions, projectionMonths }); }
+export function calculatePayroll(positions: Array<Partial<StaffingPositionInput>>, projectionMonths = 36): StaffingProjectionResult { return calculatePayrollProjection({ positions, projectionMonths }); }
