@@ -98,5 +98,11 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
 VITE_AUTH_REDIRECT_URL=https://the-biz-plans-ai-akshigakhars-projects.vercel.app
 ```
 
+Deployments that still store the legacy `VITE_SUPABASE_ANON_KEY` variable are
+also supported. When both key variables exist, `VITE_SUPABASE_PUBLISHABLE_KEY`
+takes precedence. After rotating a key in Supabase, update the matching Vercel
+environment variable and redeploy the application; revoked keys produce an
+invalid-API-key response from Supabase.
+
 Only the publishable key belongs in browser configuration. Never expose the
 service-role key, Google client secret, or SMTP password through `VITE_*`.

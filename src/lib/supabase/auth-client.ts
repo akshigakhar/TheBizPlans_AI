@@ -16,7 +16,11 @@ function assertConfigured() {
 }
 
 function errorMessage(value: any) {
-  return value?.msg || value?.message || value?.error_description || value?.error || 'Authentication request failed.';
+  const message = value?.msg || value?.message || value?.error_description || value?.error;
+  if (typeof message === 'string' && /invalid api key/i.test(message)) {
+    return 'Account service configuration is out of date. Please contact support.';
+  }
+  return message || 'Authentication request failed.';
 }
 
 async function request(path: string, init: RequestInit = {}) {
