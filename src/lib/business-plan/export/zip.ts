@@ -1,0 +1,8 @@
+const encoder=new TextEncoder();
+const table=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?0xedb88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const crc32=(data:Uint8Array)=>{let c=0xffffffff;for(const b of data)c=table[(c^b)&255]^(c>>>8);return (c^0xffffffff)>>>0};
+const u16=(v:number)=>new Uint8Array([v&255,(v>>>8)&255]); const u32=(v:number)=>new Uint8Array([v&255,(v>>>8)&255,(v>>>16)&255,(v>>>24)&255]);
+const join=(parts:Uint8Array[])=>{const out=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let at=0;for(const p of parts){out.set(p,at);at+=p.length}return out};
+/** Dependency-free STORE-mode ZIP writer used for both OOXML formats. */
+export function createZip(files:Record<string,string|Uint8Array>):Uint8Array{const local:Uint8Array[]=[],central:Uint8Array[]=[];let offset=0;for(const [name,value] of Object.entries(files)){const n=encoder.encode(name),data=typeof value==='string'?encoder.encode(value):value,crc=crc32(data),header=join([u32(0x04034b50),u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),u32(data.length),u32(data.length),u16(n.length),u16(0),n]);local.push(header,data);central.push(join([u32(0x02014b50),u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),u32(data.length),u32(data.length),u16(n.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(offset),n]));offset+=header.length+data.length}const body=join(local),directory=join(central),count=central.length;return join([body,directory,u32(0x06054b50),u16(0),u16(0),u16(count),u16(count),u32(directory.length),u32(body.length),u16(0)])}
+export const xmlEscape=(v:unknown)=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
