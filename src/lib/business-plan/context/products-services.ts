@@ -1,0 +1,2 @@
+import { compact,rows,type PlanSource } from './shared.ts';
+export const buildProductsServicesContext=({questionnaire:q}:PlanSource)=>compact({offerings:rows(q,'revenueStreams').map((x:any)=>({name:x.Name,description:x.Description,customerNeed:x['Customer need addressed'],sellingPriceDescription:x['Selling price'],deliveryMethod:x['How it is delivered'],purchaseFrequency:x['Frequency of purchase'],competitiveAdvantage:x['Competitive advantage']}))});

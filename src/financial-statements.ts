@@ -9,7 +9,7 @@ export const statementRows: Record<StatementName, Array<[string, string, ('money
 };
 
 const dataFor = (period: FinancialStatementPeriod, name: StatementName): Record<string, number> =>
-  period[name === 'income' ? 'incomeStatement' : name === 'cashflow' ? 'cashFlowStatement' : 'balanceSheet'];
+  period[name === 'income' ? 'incomeStatement' : name === 'cashflow' ? 'cashFlowStatement' : 'balanceSheet'] as unknown as Record<string, number>;
 
 /** Creates a test-friendly CSV without performing any financial calculations. */
 export function financialStatementCsv(statements: FinancialStatements, name: StatementName, view: 'monthly' | 'annual'): string {
