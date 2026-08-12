@@ -7,7 +7,7 @@ first projection month.
 
 ## Percentage convention
 
-`percentage_rate` and `annual_increase_percentage` store **percentage points**.
+`percentage_of_revenue` and `annual_increase_percentage` store **percentage points**.
 For example, 5% is persisted as `5.0000`, not `0.05`. Forms should display and
 submit `5`; calculations convert it to a multiplier by dividing by 100. Both
 columns allow four decimal places so that fractional percentages are not lost.
@@ -17,7 +17,7 @@ columns allow four decimal places so that fractional percentages are not lost.
 - `start_month` is one-based and inclusive. A null `end_month` means the item
   remains active to the end of the projection.
 - Percentage expenses are monthly. Their amount is the relevant month's revenue
-  multiplied by `percentage_rate / 100`.
+  multiplied by `percentage_of_revenue / 100`.
 - For a fixed recurring expense, `payment_month` is the one-based projection
   month of its first payment. Later payments repeat from that anchor according
   to `frequency`. If it is null, `start_month` is the anchor.
