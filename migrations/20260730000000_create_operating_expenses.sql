@@ -8,10 +8,11 @@ CREATE TABLE operating_expenses (
   expense_category text NOT NULL CHECK (expense_category IN ('premises','utilities','insurance','marketing','software_and_technology','professional_fees','repairs_and_maintenance','office_and_administration','travel','vehicle','banking_and_merchant_fees','licences_and_memberships','contract_services','communication','security_and_cleaning','taxes_and_permits','other')),
   calculation_type text NOT NULL
     CHECK (calculation_type IN ('fixed_amount', 'percentage_of_revenue')),
-  fixed_amount numeric(15, 2),
-  percentage_rate numeric(7, 4),
+  amount numeric(15, 2) NOT NULL DEFAULT 0 CHECK (amount >= 0),
+  percentage_of_revenue numeric(7, 4)
+    CHECK (percentage_of_revenue BETWEEN 0 AND 100),
   revenue_basis text,
-  frequency text,
+  frequency text NOT NULL DEFAULT 'monthly',
   start_month integer NOT NULL CHECK (start_month >= 1),
   end_month integer,
   annual_increase_percentage numeric(7, 4) NOT NULL DEFAULT 0
@@ -25,13 +26,11 @@ CREATE TABLE operating_expenses (
 
   CONSTRAINT operating_expenses_amount_by_type CHECK (
     (calculation_type = 'fixed_amount'
-      AND fixed_amount IS NOT NULL AND fixed_amount >= 0
-      AND percentage_rate IS NULL AND revenue_basis IS NULL
+      AND percentage_of_revenue IS NULL AND revenue_basis IS NULL
       AND frequency IN ('monthly', 'quarterly', 'semi_annual', 'annual', 'one_time'))
     OR
     (calculation_type = 'percentage_of_revenue'
-      AND fixed_amount IS NULL
-      AND percentage_rate IS NOT NULL AND percentage_rate >= 0
+      AND percentage_of_revenue IS NOT NULL
       AND revenue_basis IN ('total_revenue', 'selected_revenue_streams')
       AND frequency = 'monthly')
   ),

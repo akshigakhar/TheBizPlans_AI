@@ -60,3 +60,12 @@ test('creates three annual statements, revenue mix and financial analysis', () =
   assert.equal(analysis.breakEvenMonth, 1);
   assert.equal(analysis.cashRunway, 36);
 });
+
+test('uses a monthly operating-expense schedule in the financial projection', () => {
+  const rows = projectFinancials({ price: 10, units: 100, directCost: 0, growth: 0, expenses: [100, 300], payroll: 0, openingCash: 0 });
+  assert.equal(rows[0].expenses, 100);
+  assert.equal(rows[0].ebitda, 900);
+  assert.equal(rows[1].expenses, 300);
+  assert.equal(rows[1].ebitda, 700);
+  assert.equal(rows[2].expenses, 0);
+});
