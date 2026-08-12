@@ -98,11 +98,28 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
 VITE_AUTH_REDIRECT_URL=https://the-biz-plans-ai-akshigakhars-projects.vercel.app
 ```
 
-Deployments that still store the legacy `VITE_SUPABASE_ANON_KEY` variable are
-also supported. When both key variables exist, `VITE_SUPABASE_PUBLISHABLE_KEY`
-takes precedence. After rotating a key in Supabase, update the matching Vercel
-environment variable and redeploy the application; revoked keys produce an
-invalid-API-key response from Supabase.
+The bundled production URL always uses its bundled publishable key. This avoids
+a stale Vercel key overriding the matching production configuration. To connect
+a preview or local deployment to a different Supabase project, set both
+`VITE_SUPABASE_URL` and that project's `VITE_SUPABASE_PUBLISHABLE_KEY`, then
+redeploy so Vite can rebuild the browser bundle. The legacy
+`VITE_SUPABASE_ANON_KEY` name is also supported for non-production projects,
+although the publishable-key variable takes precedence.
+
+If Supabase responds with `Invalid API key`, check all of the following:
+
+1. The URL and publishable key come from the same Supabase project under
+   **Project Settings → API Keys**.
+2. The browser uses a publishable (or legacy anon) key, not a secret/service-role
+   key. Server keys must never use a `VITE_` prefix.
+3. There is no whitespace, quote, or obsolete value in the hosting provider's
+   environment variables, including environment-specific Preview and Production
+   overrides.
+4. The application was redeployed after changing a Vite environment variable;
+   restarting an already-built bundle is not sufficient.
+5. DevTools → Network shows the expected `/auth/v1/...` project hostname and an
+   `apikey` request header. Clear the site cache or service worker if an old
+   bundle is still being served.
 
 Only the publishable key belongs in browser configuration. Never expose the
 service-role key, Google client secret, or SMTP password through `VITE_*`.
