@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowLeft, ArrowRight, BarChart3, Bell, BookOpen, BriefcaseBusiness, Check, ChevronDown, CircleDollarSign, Copy, Download, FileChartColumn, FileSpreadsheet, FileText, LayoutDashboard, Lock, MoreHorizontal, PencilLine, Plus, Search, Settings, Sparkles, Trash2, Users, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, Bell, BookOpen, BriefcaseBusiness, Check, ChevronDown, CircleDollarSign, Copy, Download, FileChartColumn, FileSpreadsheet, FileText, LayoutDashboard, Lock, MoreHorizontal, PencilLine, Plus, Search, Settings, Sparkles, Table2, Trash2, Users, X } from 'lucide-react';
 import { annualize, financialAnalysis, loanSchedule, projectFinancials } from './finance.js';
 import { calculatePayroll } from './payroll.ts';
 import { calculateOperatingExpenses, EXPENSE_CATEGORIES, expenseCategoryLabel, normalizeOperatingExpense, validateOperatingExpense } from './operating-expenses.ts';
 import { calculateFinancialProjection } from './financial-engine.ts';
-import { financialStatementCsv, statementRows } from './financial-statements.ts';
+import { calculateFinancialAnalysis } from './financial-analysis.ts';
 import './styles.css';
 
 const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -280,20 +280,41 @@ function OperatingExpenses({expenses,setExpenses,projection,revenueMonthly,reven
 function FinancialTotal({label,value}){return <div className="financial-total"><span>{label}</span><strong>{money(value)}</strong></div>}
 
 function FinancialOutputs({projection}) {
-  const [view,setView]=useState('annual');
-  const [statement,setStatement]=useState('income');
-  const periods=projection.statements[view];
-  const rows=statementRows[statement];
-  const dataKey=statement==='income'?'incomeStatement':statement==='cashflow'?'cashFlowStatement':'balanceSheet';
-  const download=()=>{const csv=financialStatementCsv(projection.statements,statement,view);const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`projected-${statement}-${view}.csv`;link.click();URL.revokeObjectURL(url)};
-  const unbalanced=statement==='balance'?periods.filter(period=>!period.balanceSheet.isBalanced):[];
-  return <div className="outputs">
-    <div className="output-toolbar"><div><button className={view==='annual'?'active':''} onClick={()=>setView('annual')}>Year 1–3 summaries</button><button className={view==='monthly'?'active':''} onClick={()=>setView('monthly')}>Monthly view</button></div><button className="secondary csv-download" onClick={download}><Download size={14}/>Download CSV</button></div>
-    <div className="statement-tabs">{[['income','Income statement'],['cashflow','Cash-flow statement'],['balance','Balance sheet']].map(([id,label])=><button key={id} className={statement===id?'active':''} onClick={()=>setStatement(id)}>{label}</button>)}</div>
-    {unbalanced.length>0&&<div className="balance-warning" role="alert"><strong>Balance sheet warning</strong><span>{unbalanced.length} period{unbalanced.length===1?'':'s'} differ by more than $0.01. No plug account has been added.</span></div>}
-    <div className={view==='monthly'?'monthly-scroll':''}><div className="financial-table statement-table" style={{'--periods':periods.length}}><div className="financial-row head"><b>Line item</b>{periods.map(period=><b key={period.label}>{period.label}</b>)}</div>{rows.map(([label,key,format])=><div className={'financial-row '+(!key?'section':(['grossProfit','ebitda','ebit','netIncome','netChangeInCash','closingCash','totalAssets','totalLiabilities','totalEquity','totalLiabilitiesAndEquity'].includes(key)?'total':''))} key={label}><span>{label}</span>{periods.map(period=><span key={period.label}>{key?(format==='percent'?(period[dataKey][key]*100).toFixed(1)+'%':money(period[dataKey][key])):''}</span>)}</div>)}</div></div>
+  const [periodView,setPeriodView]=useState('annual');
+  const [display,setDisplay]=useState('chart');
+  const analysis=useMemo(()=>calculateFinancialAnalysis(projection),[projection]);
+  const annual=projection.statements.annual.slice(0,3);
+  const monthly=projection.monthly;
+  if(!monthly.length||!annual.length)return <div className="financial-empty"><BarChart3/><h3>No financial results yet</h3><p>Add revenue and expense assumptions to create your financial summary.</p></div>;
+  const yearOne=annual[0];
+  const y1Rows=monthly.slice(0,12);
+  const dscr=calculateFinancialAnalysis({...projection,monthly:y1Rows,statements:{...projection.statements,monthly:projection.statements.monthly.slice(0,12),annual:annual.slice(0,1)}}).debtServiceCoverageRatio;
+  const chartPeriods=periodView==='monthly'?monthly:annual;
+  const labels=periodView==='monthly'?monthly.map(row=>new Date(row.date).toLocaleDateString('en-US',{month:'short',year:'2-digit'})):annual.map(period=>period.label);
+  const income=annual.map(period=>period.incomeStatement);
+  const charts=[
+    ['Monthly revenue','36-month trend',monthly.map(row=>row.totalRevenue),monthly.map(row=>new Date(row.date).toLocaleDateString('en-US',{month:'short'}))],
+    ['Annual revenue','Year 1–3',income.map(row=>row.revenue),annual.map(row=>row.label)],
+    ['Gross profit',periodView==='monthly'?'Monthly':'Annual',chartPeriods.map(row=>periodView==='monthly'?row.grossProfit:row.incomeStatement.grossProfit),labels],
+    ['EBITDA',periodView==='monthly'?'Monthly':'Annual',chartPeriods.map(row=>periodView==='monthly'?row.ebitda:row.incomeStatement.ebitda),labels],
+    ['Net income',periodView==='monthly'?'Monthly':'Annual',chartPeriods.map(row=>periodView==='monthly'?row.netIncome:row.incomeStatement.netIncome),labels],
+    ['Closing cash',periodView==='monthly'?'Monthly':'Annual',chartPeriods.map(row=>periodView==='monthly'?row.closingCash:row.cashFlowStatement.closingCash),labels],
+    ['Loan balance','Remaining principal',periodView==='monthly'?monthly.map(row=>row.endingLoanBalances):annual.map((_,index)=>monthly[Math.min((index+1)*12,monthly.length)-1]?.endingLoanBalances||0),labels]
+  ];
+  const streams=(monthly[0]?.revenueByStream||[]).map(stream=>({label:stream.name,value:y1Rows.reduce((sum,row)=>sum+(row.revenueByStream.find(item=>item.id===stream.id)?.revenue||0),0)}));
+  const expenses=[{label:'Payroll',value:y1Rows.reduce((sum,row)=>sum+row.payroll,0)},{label:'Other operating expenses',value:y1Rows.reduce((sum,row)=>sum+row.operatingExpenses,0)}];
+  const cards=[['Year 1 revenue',yearOne.incomeStatement.revenue],['Year 1 gross profit',yearOne.incomeStatement.grossProfit],['Year 1 EBITDA',yearOne.incomeStatement.ebitda],['Year 1 net income',yearOne.incomeStatement.netIncome],['Year 1 ending cash',yearOne.cashFlowStatement.closingCash],['Year 1 DSCR',dscr.value==null?'N/A':dscr.value.toFixed(2)+'×'],['Break-even month',analysis.estimatedBreakEvenMonth?`Month ${analysis.estimatedBreakEvenMonth}`:'Not reached'],['Total funding required',analysis.maximumFundingShortfall]];
+  return <div className="results-dashboard">
+    <div className="results-heading"><div><span className="eyebrow">FINANCIAL RESULTS</span><h2>Financial summary</h2><p>Calculated results from your centralized 36-month financial projection.</p></div><div className="results-switches"><div>{['monthly','annual'].map(id=><button key={id} className={periodView===id?'active':''} onClick={()=>setPeriodView(id)}>{id==='monthly'?'Monthly':'Annual'}</button>)}</div><div><button aria-label="Chart view" className={display==='chart'?'active':''} onClick={()=>setDisplay('chart')}><BarChart3 size={15}/>Charts</button><button aria-label="Table view" className={display==='table'?'active':''} onClick={()=>setDisplay('table')}><Table2 size={15}/>Table</button></div></div></div>
+    {(analysis.minimumCashBalance<0||dscr.value!=null&&dscr.value<1)&&<div className="results-warning" role="alert"><AlertTriangle/><div><strong>Review financial risks</strong><span>{analysis.minimumCashBalance<0?'Cash falls below zero during the forecast. ':''}{dscr.value!=null&&dscr.value<1?'Year 1 cash flow does not fully cover scheduled debt service.':''}</span></div></div>}
+    <div className="result-cards">{cards.map(([label,value])=><div className="result-card" key={label}><span>{label}</span><strong>{typeof value==='number'?money(value):value}</strong></div>)}</div>
+    <section className="annual-summary"><h3>Annual summary</h3><div className="annual-summary-grid">{annual.map((period,index)=><article key={period.label}><span>YEAR {index+1}</span><strong>{money(period.incomeStatement.revenue)}</strong><small>Revenue</small><dl><div><dt>Gross profit</dt><dd>{money(period.incomeStatement.grossProfit)}</dd></div><div><dt>EBITDA</dt><dd>{money(period.incomeStatement.ebitda)}</dd></div><div><dt>Net income</dt><dd>{money(period.incomeStatement.netIncome)}</dd></div><div><dt>Closing cash</dt><dd>{money(period.cashFlowStatement.closingCash)}</dd></div></dl></article>)}</div></section>
+    {display==='chart'?<div className="results-chart-grid">{charts.map(([title,caption,values,axis])=><ResultChart key={title} title={title} caption={caption} values={values} labels={axis}/>) }<BreakdownChart title="Revenue by stream" items={streams}/><BreakdownChart title="Operating expense breakdown" items={expenses}/></div>:<ResultsTable periods={chartPeriods} monthlyView={periodView==='monthly'}/> }
   </div>;
 }
+function ResultChart({title,caption,values,labels}){const max=Math.max(...values.map(value=>Math.abs(value)),1);const points=values.map((value,index)=>`${values.length===1?50:index/(values.length-1)*100},${54-value/max*42}`).join(' ');return <div className="result-chart"><div><strong>{title}</strong><span>{caption}</span></div>{values.some(value=>value!==0)?<><svg viewBox="0 0 100 60" preserveAspectRatio="none" role="img" aria-label={`${title} chart`}><line x1="0" y1="54" x2="100" y2="54"/><polyline points={points}/></svg><div className="chart-axis"><span>{labels[0]}</span><b>{money(values.at(-1)||0)}</b><span>{labels.at(-1)}</span></div></>:<div className="chart-empty">No calculated data for this period</div>}</div>}
+function BreakdownChart({title,items}){const total=items.reduce((sum,item)=>sum+item.value,0);return <div className="result-chart breakdown-chart"><div><strong>{title}</strong><span>Year 1</span></div>{total>0?<><div className="breakdown-bar">{items.map((item,index)=><i key={item.label} style={{width:`${item.value/total*100}%`,'--color':['#2e67d1','#18a47b','#e59b39','#805ad5'][index%4]}}/>)}</div><div className="breakdown-legend">{items.map((item,index)=><span key={item.label}><i style={{'--color':['#2e67d1','#18a47b','#e59b39','#805ad5'][index%4]}}/>{item.label}<b>{money(item.value)}</b></span>)}</div></>:<div className="chart-empty">No calculated data for this period</div>}</div>}
+function ResultsTable({periods,monthlyView}){return <div className="results-table-wrap"><table className="results-table"><thead><tr><th>Period</th><th>Revenue</th><th>Gross profit</th><th>EBITDA</th><th>Net income</th><th>Closing cash</th><th>Loan balance</th></tr></thead><tbody>{periods.map(period=>{const monthly=monthlyView;return <tr key={monthly?period.date:period.label}><th>{monthly?new Date(period.date).toLocaleDateString('en-US',{month:'short',year:'numeric'}):period.label}</th><td>{money(monthly?period.totalRevenue:period.incomeStatement.revenue)}</td><td>{money(monthly?period.grossProfit:period.incomeStatement.grossProfit)}</td><td>{money(monthly?period.ebitda:period.incomeStatement.ebitda)}</td><td>{money(monthly?period.netIncome:period.incomeStatement.netIncome)}</td><td>{money(monthly?period.closingCash:period.cashFlowStatement.closingCash)}</td><td>{money(monthly?period.endingLoanBalances:period.balanceSheet.currentPortionOfDebt+period.balanceSheet.longTermDebt)}</td></tr>})}</tbody></table></div>}
 function RevenueMix({years}) { const streams=Object.keys(years[0].streams||{}); const total=Object.values(years[0].streams||{}).reduce((a,b)=>a+b,0)||1; return <div className="finance-chart mix-chart"><div><strong>Revenue by stream</strong><span>Year 1 mix</span></div><div className="mix-bar">{streams.map((name,index)=><i key={name} style={{width:`${years[0].streams[name]/total*100}%`,background:['#2e67d1','#18a47b','#e59b39'][index%3]}}/>)}</div>{streams.map((name,index)=><small key={name}><i style={{background:['#2e67d1','#18a47b','#e59b39'][index%3]}}/>{name} · {percentValue(years[0].streams[name]/total)}</small>)}</div> }
 function BreakEvenChart({months,breakEvenMonth}) { const expenses=months.map(row=>row.payroll+row.expenses); const max=Math.max(...months.map((row,index)=>Math.max(row.grossProfit,expenses[index])),1); return <div className="finance-chart break-chart"><div><strong>Break-even</strong><span>{breakEvenMonth?`Reached in month ${breakEvenMonth}`:'Not reached in forecast'}</span></div><div className="break-lines"><i style={{width:`${Math.min(100,(breakEvenMonth||36)/36*100)}%`}}/><b style={{left:`${Math.min(98,(breakEvenMonth||36)/36*100)}%`}}/></div><small>Gross profit crosses fixed operating costs</small></div> }
 const percentValue=value=>(value*100).toFixed(0)+'%';
