@@ -116,10 +116,10 @@ test('calculates monthly working-capital balances, changes, and cash impact from
     directCostAssumptions: [{ revenueStreamId: 'sales', percentage: 50 }],
     workingCapitalAssumptions: { accountsReceivableDays: 15, inventoryDays: 10, accountsPayableDays: 20 },
   })).monthly;
-  assert.deepEqual([rows[0].accountsReceivable, rows[0].inventory, rows[0].accountsPayable], [150, 50, 100]);
-  assert.deepEqual([rows[1].changeInAccountsReceivable, rows[1].changeInInventory, rows[1].changeInAccountsPayable], [150, 50, 100]);
-  assert.equal(rows[0].workingCapitalCashFlowImpact, -100);
-  assert.equal(rows[1].workingCapitalCashFlowImpact, -100);
+  assert.deepEqual([rows[0].accountsReceivable, rows[0].inventory, rows[0].accountsPayable].map(Math.round), [145, 48, 97]);
+  assert.deepEqual([rows[1].changeInAccountsReceivable, rows[1].changeInInventory, rows[1].changeInAccountsPayable].map(Math.round), [155, 52, 103]);
+  assert.ok(Math.abs(rows[0].workingCapitalCashFlowImpact + 96.7741935484) < 1e-6);
+  assert.ok(Math.abs(rows[1].workingCapitalCashFlowImpact + 103.2258064516) < 1e-6);
 });
 
 test('supports minimum inventory and percentage fallbacks when days are omitted', () => {
@@ -154,4 +154,26 @@ test('starts straight-line depreciation in the purchase month and stops at resid
   assert.deepEqual(rows.map(row => row.depreciationAndAmortization), [0, 100, 100, 100, 0]);
   assert.deepEqual(rows.map(row => row.accumulatedDepreciation), [0, 100, 200, 300, 300]);
   assert.deepEqual(rows.map(row => row.netBookValue), [0, 400, 300, 200, 200]);
+});
+
+
+test('uses actual calendar days and preserves opening inventory without double counting', () => {
+  const row = calculateFinancialProjection(base({ projectionStartDate: '2026-01-01', projectionMonths: 1, openingCash: 50000,
+    revenueStreams: [{ id:'r', name:'Sales', startMonth:1, unitPrice:31000, monthlyUnits:1 }], directCostAssumptions:[{revenueStreamId:'r',percentage:100}],
+    startupProjectCosts:[{id:'inventory',name:'Opening inventory',amount:15000,paymentMonth:1,type:'opening_inventory'}],
+    workingCapitalAssumptions:{useWorkingCapital:true,accountsReceivableDays:30,inventoryDays:20,accountsPayableDays:15,minimumInventoryBalance:15000} }));
+  assert.equal(row.monthly[0].accountsReceivable, 30000); assert.equal(row.monthly[0].inventory, 20000); assert.equal(row.monthly[0].accountsPayable, 15000);
+  assert.equal(row.monthly[0].changeInInventory, 5000); assert.equal(row.monthly[0].netWorkingCapitalAdjustment, -20000);
+});
+
+test('disabled working capital keeps startup inventory and produces no changes', () => {
+ const rows=calculateFinancialProjection(base({projectionMonths:2,startupProjectCosts:[{id:'i',name:'Inventory',amount:15000,paymentMonth:1,type:'opening_inventory'}],workingCapitalAssumptions:{useWorkingCapital:false,accountsReceivableDays:30,inventoryDays:30,accountsPayableDays:30}})).monthly;
+ assert.deepEqual(rows.map(r=>[r.accountsReceivable,r.inventory,r.accountsPayable,r.netWorkingCapitalAdjustment]),[[0,15000,0,0],[0,15000,0,0]]);
+});
+
+test('delays depreciation, caps residual value, aggregates assets, and prevents linked capex duplication', () => {
+ const projection=calculateFinancialProjection(base({projectionMonths:60,startupProjectCosts:[{id:'equipment',name:'Equipment',amount:60000,paymentMonth:2,type:'capital_asset'}],depreciationAssumptions:{assets:[{id:'a',name:'Equipment',purchaseAmount:60000,purchaseMonth:2,inServiceMonth:4,usefulLifeMonths:54,residualValue:6000,sourceStartupCostId:'equipment'},{id:'b',name:'Computer',purchaseAmount:6000,purchaseMonth:2,inServiceMonth:2,usefulLifeMonths:12,residualValue:0}]}}));
+ assert.equal(projection.monthly[1].capitalExpenditures,66000); assert.equal(projection.monthly[2].depreciationExpense,500); assert.equal(projection.monthly[3].depreciationExpense,1500);
+ assert.equal(projection.monthly.at(-1)!.accumulatedDepreciation,60000); assert.equal(projection.monthly.at(-1)!.netFixedAssets,6000);
+ assert.equal(projection.annual[0].endingGrossFixedAssets,66000); assert.equal(projection.annual[0].depreciationExpense,14500);
 });
