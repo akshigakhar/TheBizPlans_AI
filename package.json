@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "test": "node --test"
+    "test": "node --test",
+    "test:unit": "node --test test/business-plan-context.test.ts",
+    "test:integration": "node --test test/business-plan-generation.integration.test.ts",
+    "type-check": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --pretty false",
+    "migration:check": "node -e \"const fs=require('fs');const sql=fs.readFileSync('migrations/20260812040000_create_business_plan_generation.sql','utf8');for(const name of ['business_plan_sections','business_plan_section_versions','ai_usage_events'])if(!sql.includes(name))throw Error('missing '+name)\""
   },
   "dependencies": {
     "vite": "latest",
