@@ -1,2 +1,11 @@
 node_modules/
 dist/
+
+# Local configuration and credentials. Keep the documented template tracked.
+.env
+.env.*
+!.env.example
+
+# Supabase CLI local state and branch-specific secrets.
+supabase/.branches
+supabase/.temp
