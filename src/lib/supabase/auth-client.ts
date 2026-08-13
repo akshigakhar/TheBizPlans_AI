@@ -6,6 +6,7 @@ export type RestoredAuth = { session: AuthSession | null; recovery: boolean };
 
 const configuredRedirectUrl = (import.meta as any).env?.VITE_AUTH_REDIRECT_URL || '';
 const storageKey = 'thebizplans-auth-session';
+let refreshInFlight: Promise<AuthSession> | null = null;
 
 function authRedirectUrl() {
   return configuredRedirectUrl || `${location.origin}${location.pathname}`;
@@ -55,6 +56,20 @@ function normalize(data: any): AuthSession | null {
   } as AuthSession;
   persist(session);
   return session;
+}
+
+async function refresh(session: AuthSession) {
+  if (!session.refresh_token) throw new Error('Your session has expired. Please sign in again.');
+  if (!refreshInFlight) {
+    refreshInFlight = request('/token?grant_type=refresh_token', {
+      method: 'POST', body: JSON.stringify({ refresh_token: session.refresh_token }),
+    }).then(data => {
+      const refreshed = normalize(data);
+      if (!refreshed) throw new Error('The session refresh response was invalid. Please sign in again.');
+      return refreshed;
+    }).finally(() => { refreshInFlight = null; });
+  }
+  return refreshInFlight;
 }
 
 function callbackValues() {
@@ -138,14 +153,16 @@ export const supabaseAuth = {
     if (saved.expires_at > Math.floor(Date.now() / 1000) + 60) return { session: saved, recovery: false };
     if (!saved.refresh_token) { persist(null); return { session: null, recovery: false }; }
     try {
-      const session = normalize(await request('/token?grant_type=refresh_token', {
-        method: 'POST', body: JSON.stringify({ refresh_token: saved.refresh_token }),
-      }));
-      return { session, recovery: false };
+      return { session: await refresh(saved), recovery: false };
     } catch {
       persist(null);
       return { session: null, recovery: false };
     }
+  },
+
+  async validSession(session: AuthSession, forceRefresh = false) {
+    const expiresSoon = session.expires_at <= Math.floor(Date.now() / 1000) + 60;
+    return forceRefresh || expiresSoon ? refresh(session) : session;
   },
 
   async signOut(session: AuthSession | null) {

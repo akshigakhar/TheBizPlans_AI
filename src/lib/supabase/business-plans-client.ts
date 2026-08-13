@@ -1,4 +1,4 @@
-import type { AuthSession } from './auth-client.ts';
+import { supabaseAuth, type AuthSession } from './auth-client.ts';
 import { supabasePublishableKey as publishableKey, supabaseUrl } from './config.ts';
 
 export type BusinessPlanRow = {
@@ -35,18 +35,28 @@ function payload(userId: string, input: BusinessPlanInput) {
 
 async function request(session: AuthSession, query = '', init: RequestInit = {}) {
   if (!supabaseUrl || !publishableKey) throw new Error('Supabase data access is not configured.');
-  const response = await fetch(`${supabaseUrl}/rest/v1/business_plans${query}`, {
-    ...init,
-    headers: {
-      apikey: publishableKey,
-      authorization: `Bearer ${session.access_token}`,
-      'content-type': 'application/json',
-      ...init.headers,
-    },
-  });
-  const data = response.status === 204 ? null : await response.json().catch(() => null);
-  if (!response.ok) throw new Error(data?.message || data?.details || 'Unable to save business-plan data.');
-  return data;
+  let currentSession = await supabaseAuth.validSession(session);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await fetch(`${supabaseUrl}/rest/v1/business_plans${query}`, {
+      ...init,
+      headers: {
+        apikey: publishableKey,
+        authorization: `Bearer ${currentSession.access_token}`,
+        'content-type': 'application/json',
+        ...init.headers,
+      },
+    });
+    const data = response.status === 204 ? null : await response.json().catch(() => null);
+    const expiredJwt = response.status === 401 && /jwt.*expired|expired.*jwt/i.test(
+      [data?.message, data?.details, data?.error_description].filter(Boolean).join(' '),
+    );
+    if (expiredJwt && attempt === 0) {
+      currentSession = await supabaseAuth.validSession(currentSession, true);
+      continue;
+    }
+    if (!response.ok) throw new Error(data?.message || data?.details || 'Unable to save business-plan data.');
+    return data;
+  }
 }
 
 export const businessPlansClient = {
