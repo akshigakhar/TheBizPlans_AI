@@ -1,7 +1,13 @@
--- GENERATED FILE: run npm run database:sql to rebuild.
--- FRESH PROJECTS ONLY: execute in an empty Supabase project.
--- Do not run this file over an existing business_plans table; use database-upgrade.sql.
--- The seed requires akshi.gakhar@gmail.com to exist in Authentication first.
+-- DESTRUCTIVE: removes and recreates every application object in public.
+-- Authentication users in auth are preserved. All existing public data is deleted.
+-- Confirm akshi.gakhar@gmail.com exists in Authentication before running.
+
+drop schema if exists public cascade;
+create schema public authorization postgres;
+comment on schema public is 'standard public schema';
+grant usage on schema public to postgres, anon, authenticated, service_role;
+grant all on schema public to postgres, service_role;
+grant create on schema public to postgres, service_role;
 
 -- ============================================================================
 -- SOURCE: supabase/migrations/20260812185225_remote_schema.sql
