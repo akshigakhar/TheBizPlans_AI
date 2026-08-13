@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, Bell, BookOpen, BriefcaseBusiness, Check, ChevronDown, CircleDollarSign, Copy, Download, FileChartColumn, FileSpreadsheet, FileText, LayoutDashboard, Lock, MoreHorizontal, PencilLine, Plus, Search, Settings, Sparkles, Table2, Trash2, Users, X, History, Eye, RotateCcw, Save } from 'lucide-react';
 import { annualize, financialAnalysis, loanSchedule, projectFinancials } from './finance.js';
@@ -35,6 +35,7 @@ function App() {
   const [planSaving, setPlanSaving] = useState(false);
   const [form, setForm] = useState({ planName: 'Acme Studio — Growth Plan', businessName: 'Acme Creative Studio', country: 'United States', region: 'New York', city: 'Brooklyn', stage: 'Expansion', purpose: 'Bank or lender', projectionPeriod: '3 years (36 months)', currency: 'USD', description: 'A strategy and design studio helping growing organizations build clear brands and effective digital experiences.', problem: 'Growing businesses often lack consistent brand direction and an experienced, flexible creative team.', difference: 'Senior-level expertise, a focused process, and flexible project or retainer engagements.', shortGoals: 'Build recurring client revenue and hire a full-time designer.', longGoals: 'Become the trusted creative partner for growth-stage organizations across the United States.' });
   const update = (key, value) => setForm(f => ({ ...f, [key]: value }));
+  const updateFinancialDraft = useCallback(value => setForm(current => ({ ...current, financialDraft:value })), []);
   const notify = msg => { setToast(msg); setTimeout(() => setToast(''), 2400); };
   const refreshPlans=async currentSession=>{setPlansLoading(true);try{setPlans((await businessPlansClient.list(currentSession)).map(displayPlan))}catch(error){notify(error instanceof Error?error.message:'Unable to load your saved plans.')}finally{setPlansLoading(false)}};
   const createPlan=async()=>{if(!session||planSaving)return;setPlanSaving(true);try{const row=await businessPlansClient.create(session,form);setPlans(current=>[displayPlan(row),...current]);setActivePlanId(row.id);setView('builder');notify('Business plan saved')}catch(error){notify(error instanceof Error?error.message:'Unable to save your business plan.')}finally{setPlanSaving(false)}};
@@ -59,7 +60,7 @@ function App() {
       {activeView === 'dashboard' && <Dashboard plans={plans} loading={plansLoading} onCreate={() => setView('setup')} onOpen={openPlan} onDuplicate={duplicatePlan} onDelete={deletePlan} setView={setView} notify={notify} />}
       {activeView === 'setup' && <Setup form={form} update={update} onCancel={() => setView('dashboard')} onCreate={createPlan} saving={planSaving} />}
       {activeView === 'builder' && <Builder form={form} update={update} activeStep={activeStep} setActiveStep={setActiveStep} setView={setView} saving={planSaving} />}
-      {activeView === 'financials' && <Financials setView={setView} currency={form.currency} onReviewChange={setFinancialReview} />}
+      {activeView === 'financials' && <Financials key={activePlanId||'new-plan'} setView={setView} currency={form.currency} initialDraft={form.financialDraft} onDraftChange={updateFinancialDraft} onReviewChange={setFinancialReview} />}
       {activeView === 'review' && <Review review={financialReview} onBack={() => setView('financials')} onContinue={() => setView('editor')} />}
       {activeView === 'generating' && <Generating />}
       {activeView === 'editor' && <Editor form={form} review={financialReview} notify={notify} />}
@@ -208,7 +209,7 @@ function QuestionnaireStep({step,form,update}) {
   return <div className="generic-fields">{step===1&&<div className="section-prompt">Add every owner and describe who will manage daily operations, including any advisors or key employees.</div>}{questions.map((label,i)=><Field key={label} label={label} area={i>1} value={answers[label]||''} placeholder="Enter your answer" onChange={v=>setAnswer(label,v)}/>)}{spec&&renderRepeater(spec)}{step===9&&renderRepeater({key:'fundingSources',title:'Source of Funds',fields:['Source (owner investment, bank loan, existing cash, investor contribution, government funding or other financing)','Amount','Terms or notes']})}{step===4&&<div className="research-note"><Sparkles size={16}/><span><strong>Add your own research now.</strong> The system can help you improve this section later without replacing your facts.</span></div>}</div>;
 }
 
-function Financials({setView,currency,onReviewChange}) {
+function Financials({setView,currency,initialDraft,onDraftChange,onReviewChange}) {
   const sections = [
     ['revenue','1','Revenue Assumptions','Pricing, demand and collection'],
     ['startup','2','Startup Costs','One-time uses of funds'],
@@ -220,21 +221,22 @@ function Financials({setView,currency,onReviewChange}) {
     ['outputs','8','Projection Preview','Monthly and annual diagnostics']
   ];
   const [active,setActive]=useState('revenue');
-  const [revenues,setRevenues]=useState([{name:'Creative services',price:85,units:120,growth:4,seasonal:0,annualPriceIncrease:3,directCost:28,paymentTiming:'Due on receipt',refundRate:1}]);
-  const [startup,setStartup]=useState({businessPurchase:0,equipment:12000,furniture:3500,renovations:0,leaseholdImprovements:0,inventory:0,deposits:4000,website:2500,software:1200,legalFees:1800,accountingFees:1200,marketing:4500,licensing:600,insurance:1800,vehicle:0,workingCapital:45000,otherCosts:0});
+  const [revenues,setRevenues]=useState(()=>initialDraft?.revenues||[{name:'Creative services',price:85,units:120,growth:4,seasonal:0,annualPriceIncrease:3,directCost:28,paymentTiming:'Due on receipt',refundRate:1}]);
+  const [startup,setStartup]=useState(()=>initialDraft?.startup||{businessPurchase:0,equipment:12000,furniture:3500,renovations:0,leaseholdImprovements:0,inventory:0,deposits:4000,website:2500,software:1200,legalFees:1800,accountingFees:1200,marketing:4500,licensing:600,insurance:1800,vehicle:0,workingCapital:45000,otherCosts:0});
   const [expenses,setExpenses]=useState(()=>{
     const defaults=[
       {id:'rent',name:'Rent',category:'premises',amount:2400,frequency:'Monthly',startMonth:1,endMonth:36,annualIncrease:3,notes:''},
       {id:'software',name:'Software subscriptions',category:'software_and_technology',amount:650,frequency:'Monthly',startMonth:1,endMonth:36,annualIncrease:0,notes:''},
       {id:'marketing',name:'Marketing',category:'marketing',amount:1200,frequency:'Monthly',startMonth:1,endMonth:36,annualIncrease:0,notes:''}
     ];
+    if(Array.isArray(initialDraft?.expenses))return initialDraft.expenses.map(normalizeOperatingExpense);
     try { const saved=JSON.parse(localStorage.getItem('thebizplans-operating-expenses')); return Array.isArray(saved)?saved.map(normalizeOperatingExpense):defaults; } catch { return defaults; }
   });
-  const [staff,setStaff]=useState(()=>{ try { const saved=JSON.parse(localStorage.getItem('thebizplans-staffing-positions')); return Array.isArray(saved)?saved.map(normalizeStaffingPosition):[]; } catch { return []; } });
-  const [loans,setLoans]=useState(()=>{ try { const saved=JSON.parse(localStorage.getItem('thebizplans-loans')); return Array.isArray(saved)?saved.map(normalizeLoan):[]; } catch { return []; } });
-  const [workingCapital,setWorkingCapital]=useState({useWorkingCapital:false,accountsReceivableDays:0,inventoryDays:0,accountsPayableDays:0,minimumInventoryBalance:0,notes:''});
-  const [assetLives,setAssetLives]=useState({equipment:60,furniture:60,renovations:120,leaseholdImprovements:120,vehicle:60});
-  const [tax,setTax]=useState({incomeTaxRate:12,salesTaxRate:8.875,depreciation:'Straight-line over 5 years',openingLosses:0,ownerDraws:3000});
+  const [staff,setStaff]=useState(()=>Array.isArray(initialDraft?.staff)?initialDraft.staff.map(normalizeStaffingPosition):(()=>{ try { const saved=JSON.parse(localStorage.getItem('thebizplans-staffing-positions')); return Array.isArray(saved)?saved.map(normalizeStaffingPosition):[]; } catch { return []; } })());
+  const [loans,setLoans]=useState(()=>Array.isArray(initialDraft?.loans)?initialDraft.loans.map(normalizeLoan):(()=>{ try { const saved=JSON.parse(localStorage.getItem('thebizplans-loans')); return Array.isArray(saved)?saved.map(normalizeLoan):[]; } catch { return []; } })());
+  const [workingCapital,setWorkingCapital]=useState(()=>initialDraft?.workingCapital||{useWorkingCapital:false,accountsReceivableDays:0,inventoryDays:0,accountsPayableDays:0,minimumInventoryBalance:0,notes:''});
+  const [assetLives,setAssetLives]=useState(()=>initialDraft?.assetLives||{equipment:60,furniture:60,renovations:120,leaseholdImprovements:120,vehicle:60});
+  const [tax,setTax]=useState(()=>initialDraft?.tax||{incomeTaxRate:12,salesTaxRate:8.875,depreciation:'Straight-line over 5 years',openingLosses:0,ownerDraws:3000});
   const updateObject=(setter,key,value)=>setter(current=>({...current,[key]:value}));
   const revenueMonthly=useMemo(()=>projectFinancials({revenues:revenues.map(row=>({...row,growth:Number(row.growth||0)/100,directCost:Number(row.directCost||0)/100})),expenses:0,payroll:0}).map(row=>row.revenue),[revenues]);
   const revenueStreams=useMemo(()=>revenues.map((row,index)=>({id:`revenue-${index}`,name:row.name||`Revenue stream ${index+1}`,monthly:projectFinancials({revenues:[{...row,growth:Number(row.growth||0)/100,directCost:Number(row.directCost||0)/100}],expenses:0,payroll:0}).map(month=>month.revenue)})),[revenues]);
@@ -242,6 +244,7 @@ function Financials({setView,currency,onReviewChange}) {
   useEffect(()=>{ try { localStorage.setItem('thebizplans-operating-expenses',JSON.stringify(expenses)); } catch { /* Storage may be unavailable. */ } },[expenses]);
   useEffect(()=>{ try { localStorage.setItem('thebizplans-staffing-positions',JSON.stringify(staff)); } catch { /* Storage may be unavailable. */ } },[staff]);
   useEffect(()=>{ try { localStorage.setItem('thebizplans-loans',JSON.stringify(loans)); } catch { /* Storage may be unavailable. */ } },[loans]);
+  useEffect(()=>{onDraftChange({revenues,startup,expenses,staff,loans,workingCapital,assetLives,tax})},[revenues,startup,expenses,staff,loans,workingCapital,assetLives,tax,onDraftChange]);
   const payrollProjection=useMemo(()=>calculatePayroll(staff),[staff]);
   const payroll=payrollProjection.monthly.map(row=>row.total_payroll);
   const openingCash=Number(startup.workingCapital||0);
