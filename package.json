@@ -11,7 +11,8 @@
     "test:integration": "node --test test/business-plan-generation.integration.test.ts",
     "type-check": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --pretty false",
-    "migration:check": "node scripts/check-migrations.mjs"
+    "migration:check": "node scripts/check-migrations.mjs",
+    "database:sql": "node scripts/build-database-sql.mjs"
   },
   "dependencies": {
     "lucide-react": "latest",

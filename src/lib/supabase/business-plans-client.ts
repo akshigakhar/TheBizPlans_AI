@@ -5,6 +5,7 @@ export type BusinessPlanRow = {
   id: string; user_id: string; plan_name: string; business_name: string;
   country: string | null; region: string | null; city: string | null;
   currency: string; projection_months: number; created_at: string; updated_at: string;
+  plan_data?: Record<string, unknown> | null;
 };
 
 export type BusinessPlanInput = {
@@ -28,6 +29,7 @@ function payload(userId: string, input: BusinessPlanInput) {
     city: input.city?.trim() || null,
     currency: input.currency || 'USD',
     projection_months: projectionMonths(input.projectionPeriod),
+    plan_data: input,
   };
 }
 
@@ -73,7 +75,7 @@ export const businessPlansClient = {
 
 export function planRowToForm(row: BusinessPlanRow) {
   const years = row.projection_months / 12;
-  return { planName: row.plan_name, businessName: row.business_name, country: row.country || '',
+  return { ...(row.plan_data || {}), planName: row.plan_name, businessName: row.business_name, country: row.country || '',
     region: row.region || '', city: row.city || '', currency: row.currency,
     projectionPeriod: `${years} ${years === 1 ? 'year' : 'years'} (${row.projection_months} months)` };
 }

@@ -31,6 +31,14 @@ const checks = [
     file: 'migrations/20260812090000_allow_plan_owner_delete.sql',
     required: ['users delete own plans', 'for delete', 'auth.uid()'],
   },
+  {
+    file: 'migrations/20260813000000_persist_business_plan_data.sql',
+    required: ['plan_data', 'jsonb', 'not null'],
+  },
+  {
+    file: 'migrations/20260813010000_seed_akshi_business_plans.sql',
+    required: ['akshi.gakhar@gmail.com', 'auth.users', 'on conflict (id) do update'],
+  },
 ];
 
 for (const { file, required } of checks) {
