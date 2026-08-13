@@ -47,6 +47,14 @@ test('includes recurring expenses and delayed hiring', () => {
   assert.deepEqual(rows.map(row => row.payroll), [0, 0, 1000, 1000]);
 });
 
+test('reconciles operating-expense detail across annual increase boundaries', () => {
+  const projection = calculateFinancialProjection(base({ projectionMonths: 36,
+    operatingExpenses: [{ id: 'rent', name: 'Rent', category: 'premises', amount: 200, frequency: 'Monthly', startMonth: 1, endMonth: 36, annualIncrease: 10, notes: '', calculationType: 'Fixed Amount', revenueBasis: 'total_revenue', revenueStreamIds: [] }],
+  }));
+  assert.deepEqual(projection.monthly.filter(row => [12, 24, 36].includes(row.monthIndex)).map(row => row.operatingExpenses), [200, 220.00000000000003, 242.00000000000003]);
+  assert.equal(projection.validation.errors.some(error => error.code === 'expense_reconciliation'), false);
+});
+
 test('records loan proceeds, repayments, interest, and ending balances', () => {
   const rows = calculateFinancialProjection(base({ projectionMonths: 2, loanAssumptions: [{ id: 'loan', loan_name: 'Loan', lender_name: null, original_principal: 1200, annual_interest_rate: 12, amortization_months: 12, term_months: null, payment_frequency: 'monthly', loan_start_month: 2, interest_only_months: 0, balloon_payment: null, financing_fee: null, existing_or_proposed: 'proposed', notes: '' }] })).monthly;
   assert.equal(rows[0].loanProceeds, 0); assert.equal(rows[1].loanProceeds, 1200);
