@@ -12,6 +12,7 @@ import { BusinessPlanEditorService, getCurrentSectionContent, MAX_SECTION_CHARAC
 import { BusinessPlanGenerationService, MemoryGenerationRepository } from './lib/business-plan/generation-service.ts';
 import { calculateLoanProjection, normalizeLoan, validateLoan, LOAN_TYPES } from './loans.ts';
 import { isConfirmationEmailError, supabaseAuth } from './lib/supabase/auth-client.ts';
+import { businessPlansClient, planRowToForm } from './lib/supabase/business-plans-client.ts';
 import './styles.css';
 
 const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -30,12 +31,20 @@ function App() {
   const [plansLoading, setPlansLoading] = useState(false);
   const [toast, setToast] = useState('');
   const [financialReview, setFinancialReview] = useState(null);
+  const [activePlanId, setActivePlanId] = useState(null);
+  const [planSaving, setPlanSaving] = useState(false);
   const [form, setForm] = useState({ planName: 'Acme Studio — Growth Plan', businessName: 'Acme Creative Studio', country: 'United States', region: 'New York', city: 'Brooklyn', stage: 'Expansion', purpose: 'Bank or lender', projectionPeriod: '3 years (36 months)', currency: 'USD', description: 'A strategy and design studio helping growing organizations build clear brands and effective digital experiences.', problem: 'Growing businesses often lack consistent brand direction and an experienced, flexible creative team.', difference: 'Senior-level expertise, a focused process, and flexible project or retainer engagements.', shortGoals: 'Build recurring client revenue and hire a full-time designer.', longGoals: 'Become the trusted creative partner for growth-stage organizations across the United States.' });
   const update = (key, value) => setForm(f => ({ ...f, [key]: value }));
   const notify = msg => { setToast(msg); setTimeout(() => setToast(''), 2400); };
-  const createPlan = () => { setPlans(p => [{ id: Date.now(), name: form.planName || 'Untitled business plan', company: form.businessName || 'New business', stage: 'Draft', progress: 9, updated: 'Just now' }, ...p]); setView('builder'); };
+  const refreshPlans=async currentSession=>{setPlansLoading(true);try{setPlans((await businessPlansClient.list(currentSession)).map(displayPlan))}catch(error){notify(error instanceof Error?error.message:'Unable to load your saved plans.')}finally{setPlansLoading(false)}};
+  const createPlan=async()=>{if(!session||planSaving)return;setPlanSaving(true);try{const row=await businessPlansClient.create(session,form);setPlans(current=>[displayPlan(row),...current]);setActivePlanId(row.id);setView('builder');notify('Business plan saved')}catch(error){notify(error instanceof Error?error.message:'Unable to save your business plan.')}finally{setPlanSaving(false)}};
+  const openPlan=plan=>{setForm(current=>({...current,...planRowToForm(plan.row)}));setActivePlanId(plan.id);setView('builder')};
+  const duplicatePlan=async plan=>{if(!session)return;try{const row=await businessPlansClient.create(session,{...planRowToForm(plan.row),planName:`${plan.name} copy`});setPlans(current=>[displayPlan(row),...current]);notify('Business plan duplicated')}catch(error){notify(error instanceof Error?error.message:'Unable to duplicate your business plan.')}};
+  const deletePlan=async plan=>{if(!session||!window.confirm(`Delete “${plan.name}”? This cannot be undone.`))return;try{await businessPlansClient.remove(session,plan.id);setPlans(current=>current.filter(item=>item.id!==plan.id));if(activePlanId===plan.id)setActivePlanId(null);notify('Business plan deleted')}catch(error){notify(error instanceof Error?error.message:'Unable to delete your business plan.')}};
   useEffect(()=>{let active=true;supabaseAuth.restoreSession().then(({session:value,recovery})=>{if(!active)return;setSession(value);if(recovery){setAuthMode('update');setView('signup')}else if(value)setView('dashboard')}).catch(error=>{if(active){setToast(error instanceof Error?error.message:'Unable to restore your session.');setView('signup')}}).finally(()=>active&&setAuthReady(true));return()=>{active=false}},[]);
   useEffect(()=>{if(authReady&&!session&&!['landing','signup'].includes(view))setView('signup')},[authReady,session,view]);
+  useEffect(()=>{if(session)refreshPlans(session);else{setPlans([]);setActivePlanId(null)}},[session]);
+  useEffect(()=>{if(!session||!activePlanId)return;const timer=window.setTimeout(async()=>{setPlanSaving(true);try{const row=await businessPlansClient.update(session,activePlanId,form);setPlans(current=>current.map(plan=>plan.id===row.id?displayPlan(row):plan))}catch(error){notify(error instanceof Error?error.message:'Unable to save your changes.')}finally{setPlanSaving(false)}},600);return()=>window.clearTimeout(timer)},[form,session,activePlanId]);
   const signOut=async()=>{try{await supabaseAuth.signOut(session)}finally{setSession(null);setView('landing')}};
   if(!authReady)return <div className="auth-loading"><div className="generate-orb"><Lock size={25}/></div><p>Restoring your secure session…</p></div>;
   const activeView=session||['landing','signup'].includes(view)?view:'signup';
@@ -47,9 +56,9 @@ function App() {
       {!['landing','signup','dashboard'].includes(activeView) && <FlowTracker current={activeView === 'editor' ? 6 : flowView[activeView] ?? 0} />}
       {activeView === 'landing' && <Landing onStart={() => {setAuthMode('signup');setView('signup')}} onSignIn={() => {setAuthMode('signin');setView('signup')}} />}
       {activeView === 'signup' && <SignUp initialMode={authMode} session={session} onAuthenticated={value=>{setSession(value);setView('dashboard')}} onBack={signOut} />}
-      {activeView === 'dashboard' && <Dashboard plans={plans} setPlans={setPlans} onCreate={() => setView('setup')} setView={setView} notify={notify} />}
-      {activeView === 'setup' && <Setup form={form} update={update} onCancel={() => setView('dashboard')} onCreate={createPlan} />}
-      {activeView === 'builder' && <Builder form={form} update={update} activeStep={activeStep} setActiveStep={setActiveStep} setView={setView} notify={notify} />}
+      {activeView === 'dashboard' && <Dashboard plans={plans} loading={plansLoading} onCreate={() => setView('setup')} onOpen={openPlan} onDuplicate={duplicatePlan} onDelete={deletePlan} setView={setView} notify={notify} />}
+      {activeView === 'setup' && <Setup form={form} update={update} onCancel={() => setView('dashboard')} onCreate={createPlan} saving={planSaving} />}
+      {activeView === 'builder' && <Builder form={form} update={update} activeStep={activeStep} setActiveStep={setActiveStep} setView={setView} saving={planSaving} />}
       {activeView === 'financials' && <Financials setView={setView} currency={form.currency} onReviewChange={setFinancialReview} />}
       {activeView === 'review' && <Review review={financialReview} onBack={() => setView('financials')} onContinue={() => setView('editor')} />}
       {activeView === 'generating' && <Generating />}
@@ -120,7 +129,7 @@ function Dashboard({plans,loading,onCreate,onOpen,onDuplicate,onDelete,setView,n
   </div> }
 function Stat({icon:Icon,value,label,tone}){return <div className="stat card"><div className={'stat-icon '+tone}><Icon/></div><div><strong>{value}</strong><span>{label}</span></div></div>}
 
-function Setup({form,update,onCancel,onCreate}) {
+function Setup({form,update,onCancel,onCreate,saving}) {
   const stageOptions = ['Startup', 'Existing business', 'Business acquisition', 'Expansion'];
   const stageDescriptions = {
     'Startup': 'A new business preparing to launch',
@@ -158,14 +167,14 @@ function Setup({form,update,onCancel,onCreate}) {
         <Select label="Currency" value={form.currency} options={['USD','CAD','GBP','AUD']} onChange={v=>update('currency',v)}/>
       </div>
       <div className="context-note"><Sparkles size={16}/><span><strong>One planning system</strong>{contextCopy}</span></div>
-      <div className="form-actions"><button className="secondary" onClick={onCancel}>Cancel</button><button className="primary" onClick={onCreate}>Create plan <ArrowRight size={17}/></button></div>
+      <div className="form-actions"><button className="secondary" onClick={onCancel}>Cancel</button><button className="primary" disabled={saving} onClick={onCreate}>{saving?'Saving…':'Create plan'} <ArrowRight size={17}/></button></div>
     </section>
   </div>
 }
 function Field({label,value,onChange,wide,area,placeholder}){return <div className={(wide?'wide ':'')+'field'}><label>{label}</label>{area?<textarea value={value} placeholder={placeholder} onChange={e=>onChange(e.target.value)}/>:<input value={value} placeholder={placeholder} onChange={e=>onChange(e.target.value)}/>}</div>}
 function Select({label,value,options,onChange}){return <div className="field"><label>{label}</label><select value={value} onChange={e=>onChange(e.target.value)}>{options.map(option=>{const item=typeof option==='string'?{value:option,label:option}:option;return <option key={item.value} value={item.value}>{item.label}</option>})}</select></div>}
 
-function Builder({form,update,activeStep,setActiveStep,setView}) { return <div className="builder"><div className="builder-head"><div><button className="back" onClick={()=>setView('dashboard')}><ArrowLeft size={16}/>Dashboard</button><h1>{form.planName}</h1><p>Questionnaire · <b>{Math.round((activeStep+1)/steps.length*100)}% complete</b></p></div><div><span className="saved"><Check size={14}/>All changes saved</span></div></div><div className="builder-layout"><section className="step-list"><div className="completion"><div><b>Questionnaire</b><strong>{Math.round((activeStep+1)/steps.length*100)}%</strong></div><div className="progress"><i style={{width:(activeStep+1)/steps.length*100+'%'}}/></div></div>{steps.map((s,i)=><button className={i===activeStep?'active':i<activeStep?'done':''} onClick={()=>setActiveStep(i)} key={s}><span>{i<activeStep?<Check size={14}/>:i+1}</span>{s}</button>)}</section><section className="card question-card"><span className="eyebrow">SECTION {activeStep+1} OF {steps.length}</span><h1>{steps[activeStep]}</h1><p className="intro">Help us understand your business in your own words. We’ll use only the facts you provide.</p><QuestionnaireStep step={activeStep} form={form} update={update}/><div className="question-actions"><button className="secondary" disabled={activeStep===0} onClick={()=>setActiveStep(x=>x-1)}><ArrowLeft size={17}/>Previous</button><span>Autosaved just now</span><button className="primary" onClick={()=>{if(activeStep<steps.length-1)setActiveStep(x=>x+1);else setView('financials')}}>{activeStep===steps.length-1?'Continue to financials':'Save & continue'} <ArrowRight size={17}/></button></div></section></div></div> }
+function Builder({form,update,activeStep,setActiveStep,setView,saving}) { return <div className="builder"><div className="builder-head"><div><button className="back" onClick={()=>setView('dashboard')}><ArrowLeft size={16}/>Dashboard</button><h1>{form.planName}</h1><p>Questionnaire · <b>{Math.round((activeStep+1)/steps.length*100)}% complete</b></p></div><div><span className="saved">{!saving&&<Check size={14}/>} {saving?'Saving changes…':'All changes saved'}</span></div></div><div className="builder-layout"><section className="step-list"><div className="completion"><div><b>Questionnaire</b><strong>{Math.round((activeStep+1)/steps.length*100)}%</strong></div><div className="progress"><i style={{width:(activeStep+1)/steps.length*100+'%'}}/></div></div>{steps.map((s,i)=><button className={i===activeStep?'active':i<activeStep?'done':''} onClick={()=>setActiveStep(i)} key={s}><span>{i<activeStep?<Check size={14}/>:i+1}</span>{s}</button>)}</section><section className="card question-card"><span className="eyebrow">SECTION {activeStep+1} OF {steps.length}</span><h1>{steps[activeStep]}</h1><p className="intro">Help us understand your business in your own words. We’ll use only the facts you provide.</p><QuestionnaireStep step={activeStep} form={form} update={update}/><div className="question-actions"><button className="secondary" disabled={activeStep===0} onClick={()=>setActiveStep(x=>x-1)}><ArrowLeft size={17}/>Previous</button><span>Autosaved just now</span><button className="primary" onClick={()=>{if(activeStep<steps.length-1)setActiveStep(x=>x+1);else setView('financials')}}>{activeStep===steps.length-1?'Continue to financials':'Save & continue'} <ArrowRight size={17}/></button></div></section></div></div> }
 
 const sectionQuestions = {
   0: ['What is the business name?','What does the business do?','What problem or need does it address?','Where will it operate?','Is it online, physical or both?','When did or will it begin?','What is the legal structure?','What are the short-term goals?','What are the long-term goals?','What makes the business different?'],
