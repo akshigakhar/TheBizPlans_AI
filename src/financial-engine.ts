@@ -302,7 +302,9 @@ function validateProjection(rows: MonthlyFinancialResult[], assumptions: Financi
     const streamRevenue = row.revenueByStream.reduce((sum, item) => sum + item.revenue, 0); const streamCosts = row.directCostsByStream.reduce((sum, item) => sum + item.amount, 0);
     if (Math.abs(streamRevenue - row.totalRevenue) > tolerance) error('revenue_reconciliation', 'Revenue streams do not reconcile to total revenue.', 'totalRevenue', row.monthIndex);
     if (Math.abs(streamCosts - row.totalCostOfSales) > tolerance) error('cost_reconciliation', 'Direct costs do not reconcile to cost of sales.', 'totalCostOfSales', row.monthIndex);
-    const expenseDetail = expenses.monthlyResults.filter(item => item.monthIndex === row.monthIndex).reduce((sum, item) => sum + item.totalAmount, 0);
+    // Operating-expense detail uses zero-based array indexes, while projection
+    // months are intentionally one-based for user-facing diagnostics.
+    const expenseDetail = expenses.monthlyResults.filter(item => item.monthIndex === index).reduce((sum, item) => sum + item.totalAmount, 0);
     if (Math.abs(expenseDetail - row.operatingExpenses) > tolerance) error('expense_reconciliation', 'Operating-expense detail does not reconcile.', 'operatingExpenses', row.monthIndex);
     const loanRows = debt.loan_schedules.map(schedule => schedule.monthly[index]).filter(Boolean);
     if (Math.abs(loanRows.reduce((sum, item) => sum + item.interest_payment, 0) - row.interestExpense) > tolerance || Math.abs(loanRows.reduce((sum, item) => sum + item.closing_balance, 0) - row.endingDebtBalance) > tolerance) error('loan_reconciliation', 'Loan schedules do not reconcile.', undefined, row.monthIndex);
