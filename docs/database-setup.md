@@ -55,6 +55,12 @@ This is intentionally destructive: **all current data in `public` is deleted**.
 Do not run it when public data must be retained. Use `database-seed.sql` for a
 healthy existing schema instead.
 
+The generated bundles restore `search_path = public, extensions` before every
+source file. This is required because the initial Supabase schema dump clears
+the search path, while later migrations contain statements such as
+`CREATE TABLE operating_expenses` without an explicit schema. Without the reset,
+Postgres reports `3F000: no schema has been selected to create in`.
+
 ## Rebuild the complete query
 
 After changing a migration, regenerate the executable SQL file:

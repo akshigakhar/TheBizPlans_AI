@@ -6,6 +6,9 @@
 -- ============================================================================
 -- SOURCE: migrations/20260729000000_create_revenue_streams.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 begin;
 
 create table if not exists public.revenue_streams (
@@ -36,6 +39,9 @@ commit;
 -- ============================================================================
 -- SOURCE: migrations/20260730000000_create_operating_expenses.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 BEGIN;
 
 CREATE TABLE operating_expenses (
@@ -145,6 +151,9 @@ COMMIT;
 -- ============================================================================
 -- SOURCE: migrations/20260812000000_create_staffing_positions_and_payroll_outputs.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 BEGIN;
 
 -- Assumptions only: deterministic projection output is calculated in TypeScript.
@@ -214,6 +223,9 @@ COMMIT;
 -- ============================================================================
 -- SOURCE: migrations/20260812010000_create_loans.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 BEGIN;
 
 CREATE TABLE loans (
@@ -279,6 +291,9 @@ COMMIT;
 -- ============================================================================
 -- SOURCE: migrations/20260812020000_create_working_capital_and_fixed_assets.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 BEGIN;
 
 CREATE TABLE working_capital_assumptions (
@@ -321,6 +336,9 @@ COMMIT;
 -- ============================================================================
 -- SOURCE: migrations/20260812030000_create_financial_review_snapshots.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 BEGIN;
 
 CREATE TYPE financial_status AS ENUM ('incomplete','calculating','requires_correction','ready_for_review','approved','outdated');
@@ -382,6 +400,9 @@ COMMIT;
 -- ============================================================================
 -- SOURCE: migrations/20260812040000_create_business_plan_generation.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 begin;
 -- Server code is the only writer of provider metadata and usage rows.
 alter table public.business_plans add column business_plan_generation_status text not null default 'not_started' check(business_plan_generation_status in ('not_started','ready','partially_generated','generated','requires_update'));
@@ -412,6 +433,9 @@ commit;
 -- ============================================================================
 -- SOURCE: migrations/20260812050000_business_plan_editor_workflow.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 begin;
 
 alter table public.business_plan_sections
@@ -444,6 +468,9 @@ commit;
 -- ============================================================================
 -- SOURCE: migrations/20260812060000_business_plan_exports.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 begin;
 create table public.business_plan_exports (
  id uuid primary key default gen_random_uuid(), business_plan_id uuid not null references public.business_plans(id) on delete cascade,
@@ -467,6 +494,9 @@ commit;
 -- ============================================================================
 -- SOURCE: migrations/20260812070000_plan_payments_and_entitlements.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 create type public.plan_payment_status as enum ('checkout_started','paid','payment_failed','refunded','disputed');
 create type public.plan_entitlement_status as enum ('active','suspended','revoked');
 create table public.stripe_customers(user_id uuid primary key references auth.users(id) on delete cascade,stripe_customer_id text not null unique,created_at timestamptz not null default now(),updated_at timestamptz not null default now());
@@ -482,6 +512,9 @@ create policy "customers read own" on public.stripe_customers for select using(a
 -- ============================================================================
 -- SOURCE: migrations/20260812080000_admin_operations.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 -- Admin authorization and operational controls. Timestamps are stored in UTC.
 create type public.app_role as enum ('user','admin');
 create table public.profiles (
@@ -537,6 +570,9 @@ create index if not exists exports_plan_generated_idx on public.business_plan_ex
 -- ============================================================================
 -- SOURCE: migrations/20260812090000_allow_plan_owner_delete.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 begin;
 create policy "users delete own plans" on public.business_plans
 for delete using (user_id = auth.uid());
@@ -545,6 +581,9 @@ commit;
 -- ============================================================================
 -- SOURCE: migrations/20260813000000_persist_business_plan_data.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 -- Keep the complete guided questionnaire with its owning business plan. The
 -- existing typed columns remain available for dashboard queries and exports.
 alter table public.business_plans
@@ -556,6 +595,9 @@ comment on column public.business_plans.plan_data is
 -- ============================================================================
 -- SOURCE: migrations/20260813010000_seed_akshi_business_plans.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 -- Idempotent demo data for the requested existing Supabase Auth account.
 -- The account must already exist in Authentication > Users; this migration does
 -- not create or modify credentials.

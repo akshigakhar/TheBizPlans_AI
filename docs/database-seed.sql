@@ -5,6 +5,9 @@
 -- ============================================================================
 -- SOURCE: migrations/20260813000000_persist_business_plan_data.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 -- Keep the complete guided questionnaire with its owning business plan. The
 -- existing typed columns remain available for dashboard queries and exports.
 alter table public.business_plans
@@ -16,6 +19,9 @@ comment on column public.business_plans.plan_data is
 -- ============================================================================
 -- SOURCE: migrations/20260813010000_seed_akshi_business_plans.sql
 -- ============================================================================
+-- Schema dumps intentionally clear search_path. Restore it before every source
+-- because application migrations use unqualified public object names.
+set search_path = public, extensions;
 -- Idempotent demo data for the requested existing Supabase Auth account.
 -- The account must already exist in Authentication > Users; this migration does
 -- not create or modify credentials.
