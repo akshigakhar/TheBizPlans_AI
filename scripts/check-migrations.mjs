@@ -39,6 +39,10 @@ const checks = [
     file: 'migrations/20260813010000_seed_akshi_business_plans.sql',
     required: ['akshi.gakhar@gmail.com', 'auth.users', 'on conflict (id) do update'],
   },
+  {
+    file: 'migrations/20260819000000_seed_veggi_swaadh_plan.sql',
+    required: ['veggi-swaadh restaurant inc.', 'financialstatements', 'auth.users', 'on conflict (id) do update'],
+  },
 ];
 
 for (const { file, required } of checks) {
