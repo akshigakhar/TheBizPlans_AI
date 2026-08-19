@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { authErrorMessage, isConfirmationEmailError } from '../src/lib/supabase/auth-client.ts';
+import {
+  authErrorMessage,
+  isConfirmationEmailError,
+  oauthProviderCallbackUrl,
+} from '../src/lib/supabase/auth-client.ts';
+
+test('builds the Google provider callback from the configured Supabase project', () => {
+  assert.equal(
+    oauthProviderCallbackUrl('https://example-project.supabase.co/'),
+    'https://example-project.supabase.co/auth/v1/callback',
+  );
+});
 
 test('replaces the Supabase confirmation-email transport error with actionable copy', () => {
   assert.equal(

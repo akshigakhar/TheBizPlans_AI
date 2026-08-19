@@ -12,6 +12,11 @@ function authRedirectUrl() {
   return configuredRedirectUrl || `${location.origin}${location.pathname}`;
 }
 
+/** The URI that must be allow-listed on the provider's OAuth client. */
+export function oauthProviderCallbackUrl(projectUrl = supabaseUrl) {
+  return `${projectUrl.replace(/\/$/, '')}/auth/v1/callback`;
+}
+
 function assertConfigured() {
   if (!supabaseUrl || !publishableKey) throw new Error('Supabase authentication is not configured.');
 }
