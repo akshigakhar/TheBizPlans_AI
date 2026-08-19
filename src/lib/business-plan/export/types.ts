@@ -15,6 +15,8 @@ export interface BusinessPlanExportData {
   sections:ExportSection[];
   financialSnapshot:FinancialSnapshot;
   financialSummary:ExportLine[];
+  /** Lender-facing profitability, liquidity, and debt-service ratios by projection year. */
+  financialRatios:ExportLine[];
   financialStatements:{income:ExportTable;cashFlow:ExportTable;balanceSheet:ExportTable};
   financialDetails:{revenue:ExportDetailRow[];startupCosts:ExportDetailRow[];funding:ExportDetailRow[];operatingExpenses:ExportDetailRow[];payroll:ExportDetailRow[];loans:ExportDetailRow[];analysis:ExportLine[];monthly:ExportLine[]};
   funding:{sources:ExportDetailRow[];uses:ExportDetailRow[];totalSources?:number;totalUses?:number;difference?:number};
