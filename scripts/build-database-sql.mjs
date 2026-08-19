@@ -10,8 +10,9 @@ writeFileSync('docs/database-upgrade.sql', render(`-- GENERATED FILE: run npm ru
 const seedSources = [
   'migrations/20260813000000_persist_business_plan_data.sql',
   'migrations/20260813010000_seed_akshi_business_plans.sql',
+  'migrations/20260819000000_seed_veggi_swaadh_plan.sql',
 ];
-writeFileSync('docs/database-seed.sql', render(`-- GENERATED FILE: safe targeted fix for an already configured project.\n-- Adds plan_data if missing and upserts the four requested plans.\n-- The Auth user akshi.gakhar@gmail.com must already exist.\n\n`, seedSources));
+writeFileSync('docs/database-seed.sql', render(`-- GENERATED FILE: safe targeted fix for an already configured project.\n-- Adds plan_data if missing and upserts the requested plans.\n-- The Auth user akshi.gakhar@gmail.com must already exist.\n\n`, seedSources));
 const rebuildPrelude = `-- DESTRUCTIVE: removes and recreates every application object in public.\n-- Authentication users in auth are preserved. All existing public data is deleted.\n-- Confirm akshi.gakhar@gmail.com exists in Authentication before running.\n\ndrop schema if exists public cascade;\ncreate schema public authorization postgres;\ncomment on schema public is 'standard public schema';\ngrant usage on schema public to postgres, anon, authenticated, service_role;\ngrant all on schema public to postgres, service_role;\ngrant create on schema public to postgres, service_role;\n\n`;
 writeFileSync('docs/database-rebuild.sql', rebuildPrelude + render('', sources));
 console.log(`Wrote fresh, upgrade, seed, and destructive rebuild SQL bundles from ${sources.length} ordered SQL files.`);
