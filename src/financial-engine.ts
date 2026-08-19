@@ -8,6 +8,8 @@ export interface RevenueStreamAssumption {
   id: string; name: string; startMonth: number; endMonth?: number | null;
   unitPrice: number; monthlyUnits: number; monthlyGrowthRate?: number;
   annualGrowthRate?: number; annualPriceIncreaseRate?: number;
+  /** Optional explicit annual values; each entry applies to its projection year. */
+  unitPriceByYear?: number[]; monthlyUnitsByYear?: number[];
 }
 export interface DirectCostAssumption { revenueStreamId: string; percentage?: number; fixedMonthlyAmount?: number }
 export type ProjectCostType = 'startup' | 'project' | 'capital_expenditure' | 'operating_expense' | 'capital_asset' | 'opening_inventory' | 'deposit_or_prepaid' | 'other';
@@ -76,6 +78,7 @@ export interface MonthlyFinancialResult {
   assetPurchases: number; grossFixedAssets: number; depreciationExpense: number; accumulatedDepreciation: number; netBookValue: number; netFixedAssets: number;
   monthIndex: number; yearIndex: number; calendarYear: number; calendarMonth: number; monthLabel: string; projectionYear: number; daysInMonth: number;
   directCostsByStream: DirectCostResult[]; totalOperatingCosts: number;
+  operatingExpensesByLine: Array<{ id: string; name: string; amount: number }>;
   payrollAndStaffing: { baseCompensation: number; employerPayrollCosts: number; benefits: number; bonuses: number; contractorCosts: number; totalStaffingCost: number };
   depreciation: number; amortization: number; incomeTaxExpense: number;
   expensedStartupCosts: number; deposits: number; openingInventoryPurchases: number;
@@ -140,10 +143,13 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const month = index + 1;
     if (month < stream.startMonth || month > (stream.endMonth ?? length)) return { id: stream.id, name: stream.name, revenue: 0 };
     const activeIndex = month - stream.startMonth;
-    const annualFactor = Math.pow(1 + finite(stream.annualGrowthRate) / 100, Math.floor(activeIndex / 12));
-    const priceFactor = Math.pow(1 + finite(stream.annualPriceIncreaseRate) / 100, Math.floor(activeIndex / 12));
-    const monthlyFactor = Math.pow(1 + finite(stream.monthlyGrowthRate) / 100, activeIndex);
-    return { id: stream.id, name: stream.name, revenue: nonnegative(stream.unitPrice) * nonnegative(stream.monthlyUnits) * annualFactor * priceFactor * monthlyFactor };
+    const year = Math.floor(index / 12), monthWithinYear = index % 12;
+    const explicitPrice = stream.unitPriceByYear?.[year];
+    const explicitUnits = stream.monthlyUnitsByYear?.[year];
+    const annualFactor = explicitUnits === undefined ? Math.pow(1 + finite(stream.annualGrowthRate) / 100, Math.floor(activeIndex / 12)) : 1;
+    const priceFactor = explicitPrice === undefined ? Math.pow(1 + finite(stream.annualPriceIncreaseRate) / 100, Math.floor(activeIndex / 12)) : 1;
+    const monthlyFactor = Math.pow(1 + finite(stream.monthlyGrowthRate) / 100, stream.unitPriceByYear || stream.monthlyUnitsByYear ? monthWithinYear : activeIndex);
+    return { id: stream.id, name: stream.name, revenue: nonnegative(explicitPrice ?? stream.unitPrice) * nonnegative(explicitUnits ?? stream.monthlyUnits) * annualFactor * priceFactor * monthlyFactor };
   }));
   const totalRevenue = revenueByMonth.map(rows => rows.reduce((sum, row) => sum + row.revenue, 0));
   const streamForecasts = assumptions.revenueStreams.map(stream => ({ id: stream.id, monthly: revenueByMonth.map(rows => rows.find(row => row.id === stream.id)?.revenue || 0) }));
@@ -243,7 +249,8 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const operatingCashFlow = cashReceipts - cashOperatingPayments - expensedStartupCosts - interest - taxesPaid;
     const investingCashFlow = -capitalExpenditures - deposits - openingInventoryPurchases;
     const financingCashFlow = financingInflows - principal - paidUpfrontFinancingFees;
-    return { month, date: monthDate(assumptions.projectionStartDate, index), ...monthInfo, revenueByStream: revenueRows, totalRevenue: totalRevenue[index], directCostByRevenueStream: directCostRows, directCostsByStream: directCostRows, totalCostOfSales: costOfSales, grossProfit, grossMargin: totalRevenue[index] ? grossProfit / totalRevenue[index] : 0, payroll: payrollAmount, operatingExpenses: operatingExpense, totalOperatingExpenses: totalOperatingExpense, totalOperatingCosts: totalOperatingExpense, fixedOperatingExpenses, revenueBasedOperatingExpenses,
+    const operatingExpensesByLine = expenseProjection.monthlyResults.filter(row => row.monthIndex === index).map(row => ({ id: row.expenseId, name: row.expenseName, amount: row.totalAmount }));
+    return { month, date: monthDate(assumptions.projectionStartDate, index), ...monthInfo, revenueByStream: revenueRows, totalRevenue: totalRevenue[index], directCostByRevenueStream: directCostRows, directCostsByStream: directCostRows, totalCostOfSales: costOfSales, grossProfit, grossMargin: totalRevenue[index] ? grossProfit / totalRevenue[index] : 0, payroll: payrollAmount, operatingExpenses: operatingExpense, operatingExpensesByLine, totalOperatingExpenses: totalOperatingExpense, totalOperatingCosts: totalOperatingExpense, fixedOperatingExpenses, revenueBasedOperatingExpenses,
       payrollAndStaffing: { baseCompensation: staffingSum('base_compensation'), employerPayrollCosts: staffingSum('employer_payroll_cost'), benefits: staffingSum('benefits'), bonuses: staffingSum('bonuses'), contractorCosts: staffingSum('contractor_cost'), totalStaffingCost: payrollAmount },
       ebitda, depreciationAndAmortization: depreciation, depreciation, amortization: 0, ebit, interestExpense: interest, earningsBeforeTax, incomeTax, incomeTaxExpense: incomeTax, netIncome: earningsBeforeTax - incomeTax, loanProceeds, loanPrincipalRepayment: principal, loanInterest: interest, endingLoanBalances: debtRow?.closing_balance || 0, endingDebtBalance: debtRow?.closing_balance || 0, ownerContributions, investorContributions, otherFunding, otherFinancingInflows: otherFunding, balloonPayments: debtRow?.balloon_payment || 0, financingFees: debtRow?.financing_fee || 0,
       cashReceipts, cashOperatingPayments, startupProjectCostPayments: startupPayments, expensedStartupCosts, deposits, openingInventoryPurchases, capitalExpenditures, financingInflows, debtRepayments, taxesPaid, netCashMovement, openingCash, closingCash: cash, operatingCashFlow, investingCashFlow, financingCashFlow,

@@ -17,6 +17,7 @@ export type RevenueBasis = 'total_revenue' | 'selected_revenue_streams';
 export interface OperatingExpense {
   id: string; name: string; category: string; amount: number; frequency: ExpenseFrequency;
   startMonth: number; endMonth: number | null; annualIncrease: number; notes: string;
+  annualAmounts?: number[];
   calculationType: CalculationType; revenueBasis: RevenueBasis; revenueStreamIds: string[];
 }
 
@@ -72,6 +73,10 @@ export function normalizeOperatingExpense(expense: Partial<OperatingExpense>): O
     annualIncrease: Math.max(0, number(expense.annualIncrease)), notes: String(expense.notes || '').trim(),
     revenueBasis: expense.revenueBasis === 'selected_revenue_streams' ? 'selected_revenue_streams' : 'total_revenue',
     revenueStreamIds: Array.isArray(expense.revenueStreamIds) ? [...new Set(expense.revenueStreamIds.map(String))] : [],
+    annualAmounts: Array.isArray(expense.annualAmounts) ? expense.annualAmounts.slice(0, 3).reduce<number[]>((values, value, index) => {
+      values.push(String(value ?? '').trim() === '' ? (values[index - 1] ?? Math.max(0, number(expense.amount))) : Math.max(0, number(value)));
+      return values;
+    }, []) : undefined,
   };
 }
 
@@ -103,7 +108,8 @@ export function expenseMonthlySchedule(expense: Partial<OperatingExpense>, proje
     const current = index + 1;
     if (current < item.startMonth || current > (item.endMonth ?? projectionMonths) || (current - item.startMonth) % interval !== 0) return 0;
     // Increases happen at the start of each projection year.
-    return item.amount * Math.pow(1 + item.annualIncrease / 100, Math.floor(index / 12));
+    const explicitAnnualAmount = item.annualAmounts?.[Math.floor(index / 12)];
+    return explicitAnnualAmount ?? item.amount * Math.pow(1 + item.annualIncrease / 100, Math.floor(index / 12));
   });
 }
 

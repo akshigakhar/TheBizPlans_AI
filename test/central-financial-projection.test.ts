@@ -52,3 +52,14 @@ test('adapter supplies explicit zero-value placeholders and stable assumptions h
   assert.deepEqual(assumptions.taxAssumptions, { incomeTaxRate: 0 }); assert.deepEqual(assumptions.depreciationAssumptions, { assets: [] }); assert.deepEqual(assumptions.workingCapitalAssumptions, {});
   assert.equal(calculateFinancialProjection(assumptions).metadata.assumptionsHash, calculateFinancialProjection(assumptions).metadata.assumptionsHash);
 });
+
+test('explicit annual revenue and expense assumptions change at year boundaries', () => {
+  const assumptions = base({
+    revenueStreams: [{ id: 'annual', name: 'Annual plan', startMonth: 1, unitPrice: 10, monthlyUnits: 10, unitPriceByYear: [10, 12, 15], monthlyUnitsByYear: [10, 20, 30] }],
+    operatingExpenses: [{ id: 'rent', name: 'Rent', category: 'premises', amount: 100, annualAmounts: [100, 200, 300], frequency: 'Monthly', startMonth: 1, endMonth: null, annualIncrease: 0, notes: '', calculationType: 'Fixed Amount', revenueBasis: 'total_revenue', revenueStreamIds: [] }],
+  });
+  const projection = calculateFinancialProjection(assumptions);
+  assert.deepEqual([projection.monthly[0].totalRevenue, projection.monthly[12].totalRevenue, projection.monthly[24].totalRevenue], [100, 240, 450]);
+  assert.deepEqual([projection.monthly[0].operatingExpenses, projection.monthly[12].operatingExpenses, projection.monthly[24].operatingExpenses], [100, 200, 300]);
+  assert.deepEqual(projection.monthly[12].operatingExpensesByLine, [{ id: 'rent', name: 'Rent', amount: 200 }]);
+});
