@@ -45,6 +45,16 @@ list before repeatedly testing with the same address.
 
 ## Google sign-in
 
+> **Fix for `Error 400: redirect_uri_mismatch`:** this error is emitted by
+> Google before control returns to the application, so it cannot be corrected by
+> changing the application's `redirect_to` query parameter. Open the Google OAuth
+> **Web application** client whose ID is saved in Supabase and add this exact,
+> case-sensitive Authorized redirect URI (with no trailing slash):
+> `https://bfokmiteswljdgjjvxtt.supabase.co/auth/v1/callback`. Remove any entry
+> that substitutes the Vercel URL. If more than one Google OAuth client exists,
+> use the client ID shown in the failed request's error details to make sure the
+> matching client is being edited. Then save the client and retry sign-in.
+
 The Google Cloud dashboard shown after selecting a project is the correct starting
 point. The Google Cloud project name does not have to match the Supabase project,
 although a dedicated production project is easier to administer.
@@ -69,7 +79,9 @@ although a dedicated production project is easier to administer.
    `https://bfokmiteswljdgjjvxtt.supabase.co/auth/v1/callback`
 7. Create the client and copy its client ID and client secret.
 8. In Supabase, open **Authentication → Sign In / Providers → Google**, enable
-   Google, paste the Google client ID and secret, and save.
+   Google, paste the Google client ID and secret from that same Web application
+   client, and save. A client ID from a different project/client can make the
+   redirect URI look correct in Google Cloud while the live login still fails.
 9. Do not put the Google client secret in a `VITE_*` environment variable or in
    this repository.
 
