@@ -94,3 +94,4 @@ html,body,#root,.app,main{max-width:100%;overflow-x:hidden}.financial-input-page
 .signup-card .retry-confirmation{margin:10px 0 2px}
 
 .currency-picker{min-width:220px}.currency-picker select{font-weight:700;color:var(--navy)}
+.statement-table tr.expense-group th{padding-left:18px;font-weight:700;color:var(--navy)}
