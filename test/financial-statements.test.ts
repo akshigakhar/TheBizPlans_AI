@@ -24,10 +24,25 @@ test('startup funding, inventory, fixed assets, deposits and expense reconcile w
       { id: 'deposit', name: 'Deposit', amount: 5000, paymentMonth: 1, type: 'deposit_or_prepaid' },
       { id: 'setup', name: 'Setup', amount: 5000, paymentMonth: 1, type: 'startup' }] }));
   const period = projection.statements.monthly[0];
+  assert.equal(period.incomeStatement.operatingExpenses, 0); assert.equal(period.incomeStatement.payroll, 0);
+  assert.equal(period.incomeStatement.startupCosts, 5000); assert.equal(period.incomeStatement.totalOperatingExpenses, 5000);
   assert.equal(period.incomeStatement.netIncome, -5000); assert.equal(period.cashFlowStatement.closingCash, 40000);
   assert.equal(period.balanceSheet.inventory, 10000); assert.equal(period.balanceSheet.netFixedAssets, 40000); assert.equal(period.balanceSheet.otherAssets, 5000);
   assert.equal(period.balanceSheet.retainedEarnings, -5000); assert.equal(period.balanceSheet.totalAssets, 95000); assert.equal(period.balanceSheet.isBalanced, true);
   assert.deepEqual(projection.statements.validation.errors, []);
+});
+
+test('income statement groups recurring expenses, payroll, and startup costs under the operating-expense total', () => {
+  const projection = calculateFinancialProjection(assumptions({ projectionMonths: 1,
+    operatingExpenses: [{ id: 'rent', name: 'Rent', category: 'premises', amount: 200, frequency: 'Monthly', startMonth: 1, endMonth: null, annualIncrease: 0, notes: '', calculationType: 'Fixed Amount', revenueBasis: 'total_revenue', revenueStreamIds: [] }],
+    payrollAssumptions: [{ id: 'staff', job_title: 'Employee', department: null, number_of_employees: 1, compensation_type: 'salaried', hourly_wage: null, weekly_hours: null, annual_salary: 12000, contractor_payment_type: null, contractor_monthly_amount: null, contractor_hourly_rate: null, contractor_monthly_hours: null, start_month: 1, end_month: null, annual_salary_increase_percentage: 0, employer_payroll_burden_percentage: 0, monthly_benefits_per_employee: 0, annual_bonus_per_employee: 0, notes: '' }],
+    startupProjectCosts: [{ id: 'setup', name: 'Setup', amount: 300, paymentMonth: 1, type: 'startup' }],
+  }));
+  const income = projection.statements.monthly[0].incomeStatement;
+  assert.deepEqual({ recurring: income.operatingExpenses, payroll: income.payroll, startup: income.startupCosts, total: income.totalOperatingExpenses },
+    { recurring: 200, payroll: 1000, startup: 300, total: 1500 });
+  assert.match(financialStatementCsv(projection.statements, 'income', 'monthly'), /"Startup costs","300"/);
+  assert.match(financialStatementCsv(projection.statements, 'income', 'monthly'), /"Total operating expenses","1500"/);
 });
 
 test('36 monthly statements reconcile and annual flows/balances aggregate correctly', () => {

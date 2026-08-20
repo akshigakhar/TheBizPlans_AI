@@ -8,7 +8,7 @@ const sum = <K extends keyof MonthlyFinancialResult>(rows: MonthlyFinancialResul
 
 export function buildIncomeStatement(row: MonthlyFinancialResult): IncomeStatement {
   return { revenue: row.totalRevenue, costOfSales: row.totalCostOfSales, grossProfit: row.grossProfit, grossMargin: row.grossMargin,
-    operatingExpenses: row.operatingExpenses + row.expensedStartupCosts, payroll: row.payroll, ebitda: row.ebitda,
+    operatingExpenses: row.operatingExpenses, payroll: row.payroll, startupCosts: row.expensedStartupCosts, totalOperatingExpenses: row.totalOperatingExpenses, ebitda: row.ebitda,
     depreciation: row.depreciation, amortization: row.amortization, depreciationAndAmortization: row.depreciationAndAmortization,
     ebit: row.ebit, interestExpense: row.interestExpense, incomeBeforeTax: row.earningsBeforeTax, incomeTax: row.incomeTaxExpense, netIncome: row.netIncome };
 }
@@ -91,7 +91,7 @@ function aggregateAnnual(rows: MonthlyFinancialResult[], monthly: FinancialState
   const cashFlow = <K extends keyof CashFlowStatement>(key: K) => periods.reduce((total, item) => total + Number(item.cashFlowStatement[key]), 0);
   const revenue = flow('revenue'), grossProfit = flow('grossProfit');
   const incomeStatement: IncomeStatement = { revenue, costOfSales: flow('costOfSales'), grossProfit, grossMargin: revenue ? grossProfit / revenue : 0,
-    operatingExpenses: flow('operatingExpenses'), payroll: flow('payroll'), ebitda: flow('ebitda'), depreciation: flow('depreciation'), amortization: flow('amortization'),
+    operatingExpenses: flow('operatingExpenses'), payroll: flow('payroll'), startupCosts: flow('startupCosts'), totalOperatingExpenses: flow('totalOperatingExpenses'), ebitda: flow('ebitda'), depreciation: flow('depreciation'), amortization: flow('amortization'),
     depreciationAndAmortization: flow('depreciationAndAmortization'), ebit: flow('ebit'), interestExpense: flow('interestExpense'), incomeBeforeTax: flow('incomeBeforeTax'), incomeTax: flow('incomeTax'), netIncome: flow('netIncome') };
   const cashFlowStatement: CashFlowStatement = { netIncome: cashFlow('netIncome'), depreciationAndAmortization: cashFlow('depreciationAndAmortization'), changeInAccountsReceivable: cashFlow('changeInAccountsReceivable'),
     changeInInventory: cashFlow('changeInInventory'), changeInAccountsPayable: cashFlow('changeInAccountsPayable'), otherOperatingAdjustments: cashFlow('otherOperatingAdjustments'), cashFlowFromOperatingActivities: cashFlow('cashFlowFromOperatingActivities'),

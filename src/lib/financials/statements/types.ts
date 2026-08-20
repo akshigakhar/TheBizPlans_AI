@@ -12,7 +12,7 @@ export interface StatementValidationMessage {
 
 export interface IncomeStatement {
   revenue: number; costOfSales: number; grossProfit: number; grossMargin: number;
-  operatingExpenses: number; payroll: number; ebitda: number;
+  operatingExpenses: number; payroll: number; startupCosts: number; totalOperatingExpenses: number; ebitda: number;
   depreciation: number; amortization: number; depreciationAndAmortization: number;
   ebit: number; interestExpense: number; incomeBeforeTax: number; incomeTax: number; netIncome: number;
 }
