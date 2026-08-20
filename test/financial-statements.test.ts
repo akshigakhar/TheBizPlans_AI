@@ -43,6 +43,7 @@ test('income statement groups recurring expenses, payroll, and startup costs und
     { recurring: 200, payroll: 1000, startup: 300, total: 1500 });
   assert.match(financialStatementCsv(projection.statements, 'income', 'monthly'), /"Startup costs","300"/);
   assert.match(financialStatementCsv(projection.statements, 'income', 'monthly'), /"Total operating expenses","1500"/);
+  assert.doesNotMatch(financialStatementCsv(projection.statements, 'income', 'monthly'), /Recurring operating expenses/i);
 });
 
 test('36 monthly statements reconcile and annual flows/balances aggregate correctly', () => {
