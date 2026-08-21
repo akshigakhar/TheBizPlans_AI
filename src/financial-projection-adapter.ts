@@ -17,6 +17,7 @@ export function buildFinancialProjectionAssumptions(plan: PersistedFinancialPlan
     projectionMonths: plan.projectionMonths ?? 36,
     currency: plan.currency ?? 'USD',
     openingCash: Number(plan.openingCash ?? 0),
+    initialCashReserve: Number(plan.initialCashReserve ?? 0),
     revenueStreams: plan.revenueStreams ? [...plan.revenueStreams] : [],
     directCostAssumptions: plan.directCostAssumptions ? [...plan.directCostAssumptions] : [],
     startupProjectCosts: plan.startupProjectCosts ? [...plan.startupProjectCosts] : [],
