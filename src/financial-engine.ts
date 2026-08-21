@@ -39,6 +39,8 @@ export interface WorkingCapitalAssumptions {
 export interface FinancialProjectionAssumptions {
   planId?: string;
   projectionStartDate: string; projectionMonths: number; currency: string; openingCash: number;
+  /** Target cash reserve included in project uses; it is not a financing source or cash-flow transaction. */
+  initialCashReserve?: number;
   revenueStreams: RevenueStreamAssumption[];
   directCostAssumptions: DirectCostAssumption[];
   startupProjectCosts: ProjectCostAssumption[];
@@ -79,6 +81,7 @@ export interface MonthlyFinancialResult {
   monthIndex: number; yearIndex: number; calendarYear: number; calendarMonth: number; monthLabel: string; projectionYear: number; daysInMonth: number;
   directCostsByStream: DirectCostResult[]; totalOperatingCosts: number;
   operatingExpensesByLine: Array<{ id: string; name: string; amount: number }>;
+  expensedStartupCostsByLine: Array<{ id: string; name: string; amount: number }>;
   payrollAndStaffing: { baseCompensation: number; employerPayrollCosts: number; benefits: number; bonuses: number; contractorCosts: number; totalStaffingCost: number };
   depreciation: number; amortization: number; incomeTaxExpense: number;
   expensedStartupCosts: number; deposits: number; openingInventoryPurchases: number;
@@ -250,7 +253,8 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const investingCashFlow = -capitalExpenditures - deposits - openingInventoryPurchases;
     const financingCashFlow = financingInflows - principal - paidUpfrontFinancingFees;
     const operatingExpensesByLine = expenseProjection.monthlyResults.filter(row => row.monthIndex === index).map(row => ({ id: row.expenseId, name: row.expenseName, amount: row.totalAmount }));
-    return { month, date: monthDate(assumptions.projectionStartDate, index), ...monthInfo, revenueByStream: revenueRows, totalRevenue: totalRevenue[index], directCostByRevenueStream: directCostRows, directCostsByStream: directCostRows, totalCostOfSales: costOfSales, grossProfit, grossMargin: totalRevenue[index] ? grossProfit / totalRevenue[index] : 0, payroll: payrollAmount, operatingExpenses: operatingExpense, operatingExpensesByLine, totalOperatingExpenses: totalOperatingExpense, totalOperatingCosts: totalOperatingExpense, fixedOperatingExpenses, revenueBasedOperatingExpenses,
+    const expensedStartupCostsByLine = assumptions.startupProjectCosts.filter(item => ['startup', 'project', 'operating_expense', 'other'].includes(item.type) && item.paymentMonth === month).map(item => ({ id: item.id, name: item.name, amount: nonnegative(item.amount) }));
+    return { month, date: monthDate(assumptions.projectionStartDate, index), ...monthInfo, revenueByStream: revenueRows, totalRevenue: totalRevenue[index], directCostByRevenueStream: directCostRows, directCostsByStream: directCostRows, totalCostOfSales: costOfSales, grossProfit, grossMargin: totalRevenue[index] ? grossProfit / totalRevenue[index] : 0, payroll: payrollAmount, operatingExpenses: operatingExpense, operatingExpensesByLine, expensedStartupCostsByLine, totalOperatingExpenses: totalOperatingExpense, totalOperatingCosts: totalOperatingExpense, fixedOperatingExpenses, revenueBasedOperatingExpenses,
       payrollAndStaffing: { baseCompensation: staffingSum('base_compensation'), employerPayrollCosts: staffingSum('employer_payroll_cost'), benefits: staffingSum('benefits'), bonuses: staffingSum('bonuses'), contractorCosts: staffingSum('contractor_cost'), totalStaffingCost: payrollAmount },
       ebitda, depreciationAndAmortization: depreciation, depreciation, amortization: 0, ebit, interestExpense: interest, earningsBeforeTax, incomeTax, incomeTaxExpense: incomeTax, netIncome: earningsBeforeTax - incomeTax, loanProceeds, loanPrincipalRepayment: principal, loanInterest: interest, endingLoanBalances: debtRow?.closing_balance || 0, endingDebtBalance: debtRow?.closing_balance || 0, ownerContributions, investorContributions, otherFunding, otherFinancingInflows: otherFunding, balloonPayments: debtRow?.balloon_payment || 0, financingFees: debtRow?.financing_fee || 0,
       cashReceipts, cashOperatingPayments, startupProjectCostPayments: startupPayments, expensedStartupCosts, deposits, openingInventoryPurchases, capitalExpenditures, financingInflows, debtRepayments, taxesPaid, netCashMovement, openingCash, closingCash: cash, operatingCashFlow, investingCashFlow, financingCashFlow,
@@ -295,7 +299,7 @@ function buildProjectionTotals(rows: MonthlyFinancialResult[], assumptions: Fina
   const startupCostIds = new Set(assumptions.startupProjectCosts.map(cost => cost.id));
   const costs = assumptions.startupProjectCosts.reduce((total, cost) => total + nonnegative(cost.amount), 0);
   const extraAssets = assumptions.depreciationAssumptions.assets.filter(asset => !startupCostIds.has(asset.sourceStartupCostId ?? asset.id)).reduce((total, asset) => total + nonnegative(asset.purchaseAmount ?? asset.cost), 0);
-  const totalUses = cents(costs + extraAssets); const minimumCashBalance = rows.length ? Math.min(...rows.map(row => row.closingCash)) : assumptions.openingCash;
+  const totalUses = cents(costs + extraAssets + nonnegative(assumptions.initialCashReserve)); const minimumCashBalance = rows.length ? Math.min(...rows.map(row => row.closingCash)) : assumptions.openingCash;
   return { totalRevenue: sum('totalRevenue'), totalCostOfSales: sum('totalCostOfSales'), totalGrossProfit: sum('grossProfit'), totalOperatingExpenses: sum('operatingExpenses'), totalPayroll: sum('payroll'), totalEbitda: sum('ebitda'), totalDepreciation: sum('depreciation'), totalInterest: sum('interestExpense'), totalNetIncome: sum('netIncome'), totalCapitalExpenditure: sum('capitalExpenditures'), totalOwnerContributions: sum('ownerContributions'), totalLoanProceeds: sum('loanProceeds'), totalPrincipalRepayment: sum('loanPrincipalRepayment'), totalDebtService: cents(sum('loanPrincipalRepayment') + sum('interestExpense')), endingCash: rows.at(-1)?.closingCash ?? assumptions.openingCash, endingDebt: rows.at(-1)?.endingDebtBalance ?? 0, minimumCashBalance, maximumFundingShortfall: Math.max(0, -minimumCashBalance), firstNegativeCashMonth: rows.find(row => row.closingCash < 0)?.monthIndex ?? null, totalSources, totalUses, sourcesUsesDifference: cents(totalSources - totalUses) };
 }
 

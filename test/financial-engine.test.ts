@@ -69,6 +69,19 @@ test('includes owner contributions, other funding, and capital purchases', () =>
   assert.equal(row.financingInflows, 700); assert.equal(row.capitalExpenditures, 600); assert.equal(row.closingCash, 100);
 });
 
+test('treats financing as the source of opening cash and includes the cash reserve in project uses', () => {
+  const projection = calculateFinancialProjection(base({ projectionMonths: 1, initialCashReserve: 300,
+    fundingSources: [{ id: 'owner', name: 'Owner investment', type: 'owner_contribution', amount: 1000, month: 1 }],
+    startupProjectCosts: [{ id: 'fees', name: 'Professional fees', amount: 700, paymentMonth: 1, type: 'startup' }],
+  }));
+  assert.equal(projection.monthly[0].openingCash, 0);
+  assert.equal(projection.monthly[0].ownerContributions, 1000);
+  assert.equal(projection.monthly[0].closingCash, 300);
+  assert.equal(projection.totals.totalSources, 1000);
+  assert.equal(projection.totals.totalUses, 1000);
+  assert.deepEqual(projection.monthly[0].expensedStartupCostsByLine, [{ id: 'fees', name: 'Professional fees', amount: 700 }]);
+});
+
 test('allows negative cash without clipping it', () => {
   const row = calculateFinancialProjection(base({ projectionMonths: 1, startupProjectCosts: [{ id: 'cost', name: 'Cost', amount: 100, paymentMonth: 1, type: 'project' }] })).monthly[0];
   assert.equal(row.closingCash, -100);
