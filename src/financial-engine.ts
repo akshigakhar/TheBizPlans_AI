@@ -14,7 +14,7 @@ export interface RevenueStreamAssumption {
 export interface DirectCostAssumption { revenueStreamId: string; percentage?: number; fixedMonthlyAmount?: number }
 export type ProjectCostType = 'startup' | 'project' | 'capital_expenditure' | 'operating_expense' | 'capital_asset' | 'opening_inventory' | 'deposit_or_prepaid' | 'other';
 export interface ProjectCostAssumption { id: string; name: string; amount: number; paymentMonth: number; type: ProjectCostType }
-export interface FundingSourceAssumption { id: string; name: string; type: 'owner_contribution' | 'investor_contribution' | 'proposed_loan' | 'grant' | 'other'; amount: number; month: number }
+export interface FundingSourceAssumption { id: string; name: string; type: 'owner_contribution' | 'proposed_loan' | 'grant' | 'investor_contribution' | 'other'; amount: number; month: number } // Investor/other types are read-only legacy compatibility.
 export type DepreciationMethod = 'straight_line';
 export interface DepreciableAssetAssumption {
   id: string; name: string; category?: string;
@@ -206,8 +206,9 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const incomeTax = Math.max(0, earningsBeforeTax * nonnegative(assumptions.taxAssumptions.incomeTaxRate) / 100);
     taxAccruals.push(incomeTax);
     const loanProceeds = debtRow?.loan_proceeds || 0;
-    const ownerContributions = assumptions.fundingSources.filter(item => item.type === 'owner_contribution' && item.month === month).reduce((sum, item) => sum + item.amount, 0);
-    const investorContributions = assumptions.fundingSources.filter(item => item.type === 'investor_contribution' && item.month === month).reduce((sum, item) => sum + item.amount, 0);
+    // Consolidate legacy investor equity into the supported owner-equity flow.
+    const ownerContributions = assumptions.fundingSources.filter(item => ['owner_contribution', 'investor_contribution'].includes(item.type) && item.month === month).reduce((sum, item) => sum + item.amount, 0);
+    const investorContributions = 0;
     const otherFunding = assumptions.fundingSources.filter(item => ['other', 'grant'].includes(item.type) && item.month === month).reduce((sum, item) => sum + item.amount, 0);
     const deposits = assumptions.startupProjectCosts.filter(item => item.type === 'deposit_or_prepaid' && item.paymentMonth === month).reduce((sum, item) => sum + item.amount, 0);
     const openingInventoryPurchases = assumptions.startupProjectCosts.filter(item => item.type === 'opening_inventory' && item.paymentMonth === month).reduce((sum, item) => sum + item.amount, 0);
