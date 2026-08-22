@@ -25,11 +25,25 @@ test('startup funding, inventory, fixed assets, deposits and expense reconcile w
       { id: 'setup', name: 'Setup', amount: 5000, paymentMonth: 1, type: 'startup' }] }));
   const period = projection.statements.monthly[0];
   assert.equal(period.incomeStatement.operatingExpenses, 0); assert.equal(period.incomeStatement.payroll, 0);
-  assert.equal(period.incomeStatement.startupCosts, 5000); assert.equal(period.incomeStatement.totalOperatingExpenses, 5000);
-  assert.equal(period.incomeStatement.netIncome, -5000); assert.equal(period.cashFlowStatement.closingCash, 40000);
+  assert.equal(period.incomeStatement.startupCosts, 0); assert.equal(period.incomeStatement.totalOperatingExpenses, 0);
+  assert.equal(period.incomeStatement.netIncome, 0); assert.equal(period.cashFlowStatement.closingCash, 40000);
   assert.equal(period.balanceSheet.inventory, 10000); assert.equal(period.balanceSheet.netFixedAssets, 40000); assert.equal(period.balanceSheet.otherAssets, 5000);
-  assert.equal(period.balanceSheet.retainedEarnings, -5000); assert.equal(period.balanceSheet.totalAssets, 95000); assert.equal(period.balanceSheet.isBalanced, true);
+  assert.equal(projection.statements.opening.balanceSheet.retainedEarnings, -5000); assert.equal(period.balanceSheet.totalAssets, 95000); assert.equal(period.balanceSheet.isBalanced, true);
   assert.deepEqual(projection.statements.validation.errors, []);
+});
+
+test('Year 0 records startup financing, assets, cash, and debt without a balancing plug', () => {
+  const loan = { id:'loan', loan_name:'Startup loan', lender_name:null, loan_type:'term_loan' as const, loan_status:'proposed' as const, original_principal:25000, opening_balance:0, annual_interest_rate:8, amortization_months:60, term_months:null, payment_frequency:'monthly' as const, loan_start_month:1, first_payment_month:2, interest_only_months:0, interest_only_rate_override:null, financing_fee:0, financing_fee_treatment:'paid_upfront' as const, balloon_payment:0, balloon_payment_month:null, notes:'' };
+  const projection = calculateFinancialProjection(assumptions({ fundingSources:[{id:'owner',name:'Owner',type:'owner_contribution',amount:20000,month:1}], loanAssumptions:[loan],
+    startupProjectCosts:[{id:'improvements',name:'Leasehold Improvements',amount:2500,paymentMonth:1,type:'capital_asset'}] }));
+  const opening = projection.statements.opening.balanceSheet;
+  assert.equal(opening.cash,42500); assert.equal(opening.grossFixedAssets,2500); assert.equal(opening.totalAssets,45000);
+  assert.equal(opening.currentPortionOfDebt + opening.longTermDebt,25000); assert.equal(opening.ownerContributions,20000);
+  assert.equal(opening.otherCurrentLiabilities,0); assert.equal(opening.otherEquity,0); assert.equal(opening.balanceDifference,0);
+  assert.equal(projection.statements.monthly[0].cashFlowStatement.loanProceeds,0);
+  const yearOneDebt = projection.statements.annual[0].balanceSheet.currentPortionOfDebt + projection.statements.annual[0].balanceSheet.longTermDebt;
+  const principalPaid = projection.monthly.slice(0,12).reduce((sum,row)=>sum+row.loanPrincipalRepayment,0);
+  assert.ok(Math.abs(yearOneDebt - (25000-principalPaid)) < .01);
 });
 
 test('income statement groups recurring expenses, payroll, and startup costs under the operating-expense total', () => {
@@ -40,9 +54,9 @@ test('income statement groups recurring expenses, payroll, and startup costs und
   }));
   const income = projection.statements.monthly[0].incomeStatement;
   assert.deepEqual({ recurring: income.operatingExpenses, payroll: income.payroll, startup: income.startupCosts, total: income.totalOperatingExpenses },
-    { recurring: 200, payroll: 1000, startup: 300, total: 1500 });
-  assert.match(financialStatementCsv(projection.statements, 'income', 'monthly'), /"Startup costs","300"/);
-  assert.match(financialStatementCsv(projection.statements, 'income', 'monthly'), /"Total operating expenses","1500"/);
+    { recurring: 200, payroll: 1000, startup: 0, total: 1200 });
+  assert.match(financialStatementCsv(projection.statements, 'income', 'monthly'), /"Startup costs","0"/);
+  assert.match(financialStatementCsv(projection.statements, 'income', 'monthly'), /"Total operating expenses","1200"/);
   assert.doesNotMatch(financialStatementCsv(projection.statements, 'income', 'monthly'), /Recurring operating expenses/i);
 });
 

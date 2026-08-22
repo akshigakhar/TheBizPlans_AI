@@ -59,6 +59,8 @@ export type AnnualBalanceSheet = BalanceSheet;
 export type AnnualFinancialStatements = FinancialStatementPeriod;
 
 export interface FinancialStatements {
+  /** Post-funding, pre-operation position used as the opening balance for Month 1. */
+  opening: FinancialStatementPeriod;
   monthly: FinancialStatementPeriod[];
   annual: FinancialStatementPeriod[];
   validation: { errors: StatementValidationMessage[]; warnings: StatementValidationMessage[]; advisories: StatementValidationMessage[] };

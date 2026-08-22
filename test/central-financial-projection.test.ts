@@ -30,7 +30,8 @@ test('classifies startup assets, expenses, inventory and deposits without expens
     { id: 'equipment', name: 'Equipment', amount: 20000, paymentMonth: 1, type: 'capital_asset' }, { id: 'legal', name: 'Legal', amount: 5000, paymentMonth: 1, type: 'operating_expense' },
     { id: 'stock', name: 'Stock', amount: 2000, paymentMonth: 1, type: 'opening_inventory' }, { id: 'deposit', name: 'Deposit', amount: 1000, paymentMonth: 1, type: 'deposit_or_prepaid' },
   ] }));
-  const month = result.months[0]; assert.equal(month.capitalExpenditures, 20000); assert.equal(month.expensedStartupCosts, 5000); assert.equal(month.openingInventoryPurchases, 2000); assert.equal(month.deposits, 1000); assert.equal(month.netIncome, -5000); assert.equal(month.closingCash, 22000);
+  const month = result.months[0]; assert.equal(month.capitalExpenditures, 0); assert.equal(month.expensedStartupCosts, 0); assert.equal(month.openingInventoryPurchases, 0); assert.equal(month.deposits, 0); assert.equal(month.netIncome, 0); assert.equal(month.openingCash, 22000);
+  assert.deepEqual({ inventory:result.statements.opening.balanceSheet.inventory, fixedAssets:result.statements.opening.balanceSheet.netFixedAssets, deposits:result.statements.opening.balanceSheet.otherAssets, retainedEarnings:result.statements.opening.balanceSheet.retainedEarnings }, { inventory:2000, fixedAssets:20000, deposits:1000, retainedEarnings:-5000 });
   assert.equal(result.statements.monthly[0].balanceSheet.totalAssets, 45000);
   assert.equal(result.statements.monthly[0].balanceSheet.totalEquity, 45000);
   assert.equal(result.statements.monthly[0].balanceSheet.isBalanced, true);
@@ -44,7 +45,7 @@ test('preserves negative cash and reports funding shortfall', () => {
 test('detailed proposed loan is the only projected inflow and mismatch warns', () => {
   const loan = { id: 'loan', loan_name: 'Loan', lender_name: null, loan_type: 'term_loan' as const, loan_status: 'proposed' as const, original_principal: 100000, opening_balance: 0, annual_interest_rate: 0, amortization_months: 60, term_months: null, payment_frequency: 'monthly' as const, loan_start_month: 1, first_payment_month: 2, interest_only_months: 0, interest_only_rate_override: null, financing_fee: 0, financing_fee_treatment: 'paid_upfront' as const, balloon_payment: 0, balloon_payment_month: null, notes: '' };
   const result = calculateFinancialProjection(base({ projectionMonths: 1, fundingSources: [{ id: 'high', name: 'Loan request', type: 'proposed_loan', amount: 90000, month: 1 }], loanAssumptions: [loan] }));
-  assert.equal(result.months[0].loanProceeds, 100000); assert.equal(result.months[0].financingInflows, 100000); assert.ok(result.validation.warnings.some(item => item.code === 'proposed_loan_mismatch'));
+  assert.equal(result.months[0].loanProceeds, 0); assert.equal(result.months[0].financingInflows, 0); assert.equal(result.statements.opening.balanceSheet.totalLiabilities,100000); assert.ok(result.validation.warnings.some(item => item.code === 'proposed_loan_mismatch'));
 });
 
 test('adapter supplies explicit zero-value placeholders and stable assumptions hash', () => {
