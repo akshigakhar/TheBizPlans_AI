@@ -96,4 +96,10 @@ html,body,#root,.app,main{max-width:100%;overflow-x:hidden}.financial-input-page
 
 .currency-picker{min-width:220px}.currency-picker select{font-weight:700;color:var(--navy)}
 .statement-table tr.expense-group th{padding-left:18px;font-weight:700;color:var(--navy)}
+.statement-table tr.line-item th{padding-left:18px;font-weight:500;color:inherit}
+.statement-table tr.key-profit th,.statement-table tr.key-profit td{font-weight:800;border-top:1px solid #c8d1dc;background:#f8fafc}
+.statement-table tr.grand th,.statement-table tr.grand td{border-bottom:2px solid var(--navy);background:#f3f6fa}
+.statement-table tr.section th,.statement-table tr.section td{background:#e8eef5}
+.statement-table tr.section th{padding-top:11px;padding-bottom:11px;letter-spacing:.8px}
+.statement-table tr.startup-line:first-of-type th,.statement-table tr.startup-line:first-of-type td{border-top:1px solid #e1e6ec}
 .financial-statements-list{display:grid;gap:26px}.financial-statements-list .financial-statements:first-child{padding-top:0;border-top:0}.optional-review{display:grid;gap:13px;padding-top:24px;border-top:2px solid var(--navy)}.optional-review-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}.optional-review-heading h3{font:800 18px Manrope;margin:4px 0}.optional-review-heading button{min-width:64px}.optional-review .statement-source{padding:14px 16px;border:1px solid var(--border);border-radius:8px;background:#f8faff}

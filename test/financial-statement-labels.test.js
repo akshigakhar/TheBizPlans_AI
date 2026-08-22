@@ -26,10 +26,10 @@ test('groups non-zero expensed startup costs separately from recurring expenses'
   const rows = incomeStatementDetailRows(monthly);
 
   assert.deepEqual(rows.recurringExpenses, [
-    ['Marketing', 'expense:marketing', 'expense-group'],
-    ['Rent', 'expense:rent', 'expense-group'],
+    ['Marketing', 'expense:marketing', 'line-item'],
+    ['Rent', 'expense:rent', 'line-item'],
   ]);
   assert.deepEqual(rows.startupExpenses, [
-    ['Startup Cost - Marketing', 'startup:startup-marketing', 'expense-group'],
+    ['Startup Cost - Marketing', 'startup:startup-marketing', 'line-item startup-line'],
   ]);
 });

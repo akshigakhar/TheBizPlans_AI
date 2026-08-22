@@ -55,7 +55,7 @@ export interface FinancialProjectionAssumptions {
 /** Compatibility name used by the previously shipped statement and analysis modules. */
 export type FinancialAssumptions = FinancialProjectionAssumptions;
 
-export const FINANCIAL_MODEL_VERSION = '1.2.0';
+export const FINANCIAL_MODEL_VERSION = '1.3.0';
 export interface ProjectionMonth { monthIndex: number; yearIndex: number; calendarYear: number; calendarMonth: number; monthLabel: string; projectionYear: number; daysInMonth: number }
 export interface ValidationMessage { code: string; message: string; monthIndex?: number; field?: string }
 export interface FinancialProjectionValidation { errors: ValidationMessage[]; warnings: ValidationMessage[]; advisories: ValidationMessage[] }
@@ -173,8 +173,25 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     if (!Number.isInteger(asset.usefulLifeMonths) || asset.usefulLifeMonths < 1) throw new RangeError(`Asset ${asset.name} must have a positive whole-number useful life.`);
     return { ...asset, purchaseAmount, purchaseMonth, inServiceMonth, residualValue };
   }).filter(asset => asset.isActive !== false);
-  const openingInventory = assumptions.startupProjectCosts.filter(item => item.type === 'opening_inventory').reduce((sum, item) => sum + nonnegative(item.amount), 0);
-  let cash = finite(assumptions.openingCash), previousReceivables = 0, previousPayables = 0, previousInventory = openingInventory;
+  // Month-1 startup sources and uses occur before operations. They establish Year 0
+  // and are deliberately excluded from Month 1 cash flow so they cannot be counted twice.
+  const openingCosts = assumptions.startupProjectCosts.filter(item => item.paymentMonth === 1);
+  const openingInventory = openingCosts.filter(item => item.type === 'opening_inventory').reduce((sum, item) => sum + nonnegative(item.amount), 0);
+  const openingDeposits = openingCosts.filter(item => item.type === 'deposit_or_prepaid').reduce((sum, item) => sum + nonnegative(item.amount), 0);
+  const openingExpense = openingCosts.filter(item => ['startup', 'project', 'operating_expense', 'other'].includes(item.type)).reduce((sum, item) => sum + nonnegative(item.amount), 0);
+  const openingOwnerContributions = assumptions.fundingSources.filter(item => ['owner_contribution', 'investor_contribution'].includes(item.type) && item.month === 1).reduce((sum, item) => sum + nonnegative(item.amount), 0);
+  const openingOtherEquity = assumptions.fundingSources.filter(item => ['other', 'grant'].includes(item.type) && item.month === 1).reduce((sum, item) => sum + nonnegative(item.amount), 0);
+  const openingLoanProceeds = debt.monthly[0]?.loan_proceeds ?? 0;
+  const openingDebt = assumptions.loanAssumptions.filter(loan => (loan.loan_status ?? loan.existing_or_proposed) === 'existing').reduce((sum, loan) => sum + nonnegative(loan.opening_balance), 0)
+    + assumptions.loanAssumptions.filter(loan => (loan.loan_status ?? loan.existing_or_proposed) === 'proposed' && loan.loan_start_month === 1).reduce((sum, loan) => sum + nonnegative(loan.original_principal), 0);
+  const openingFinancingFees = debt.loan_schedules.filter(schedule => schedule.monthly[0]?.financing_fee).reduce((sum, schedule) => sum + nonnegative(schedule.loan.financing_fee), 0);
+  const openingPaidUpfrontFees = debt.loan_schedules.filter(schedule => schedule.monthly[0]?.financing_fee && schedule.loan.financing_fee_treatment === 'paid_upfront').reduce((sum, schedule) => sum + nonnegative(schedule.loan.financing_fee), 0);
+  const openingCapitalCosts = openingCosts.filter(item => ['capital_expenditure', 'capital_asset'].includes(item.type)).reduce((sum, item) => sum + nonnegative(item.amount), 0);
+  const openingAssetCosts = assets.filter(asset => asset.purchaseMonth === 1 && !openingCosts.some(cost => (asset.sourceStartupCostId ?? asset.id) === cost.id)).reduce((sum, asset) => sum + asset.purchaseAmount, 0);
+  const openingFixedAssets = openingCapitalCosts + openingAssetCosts;
+  const openingCash = finite(assumptions.openingCash) + openingOwnerContributions + openingOtherEquity + openingLoanProceeds
+    - openingExpense - openingInventory - openingDeposits - openingFixedAssets - openingPaidUpfrontFees;
+  let cash = openingCash, previousReceivables = 0, previousPayables = 0, previousInventory = openingInventory;
 
   const monthly = Array.from({ length }, (_, index): MonthlyFinancialResult => {
     const month = index + 1;
@@ -192,7 +209,7 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const operatingExpense = expenses[index] || 0;
     const fixedOperatingExpenses = expenseProjection.fixedExpensesByMonth[index] || 0;
     const revenueBasedOperatingExpenses = expenseProjection.revenueBasedExpensesByMonth[index] || 0;
-    const expensedStartupCosts = assumptions.startupProjectCosts.filter(item => ['startup', 'project', 'operating_expense', 'other'].includes(item.type) && item.paymentMonth === month).reduce((sum, item) => sum + item.amount, 0);
+    const expensedStartupCosts = assumptions.startupProjectCosts.filter(item => ['startup', 'project', 'operating_expense', 'other'].includes(item.type) && item.paymentMonth === month && month !== 1).reduce((sum, item) => sum + item.amount, 0);
     const totalOperatingExpense = payrollAmount + operatingExpense + expensedStartupCosts;
     const ebitda = grossProfit - totalOperatingExpense;
     const depreciation = assets.reduce((sum, asset) => {
@@ -205,16 +222,16 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const earningsBeforeTax = ebit - interest;
     const incomeTax = Math.max(0, earningsBeforeTax * nonnegative(assumptions.taxAssumptions.incomeTaxRate) / 100);
     taxAccruals.push(incomeTax);
-    const loanProceeds = debtRow?.loan_proceeds || 0;
+    const loanProceeds = month === 1 ? 0 : debtRow?.loan_proceeds || 0;
     // Consolidate legacy investor equity into the supported owner-equity flow.
-    const ownerContributions = assumptions.fundingSources.filter(item => ['owner_contribution', 'investor_contribution'].includes(item.type) && item.month === month).reduce((sum, item) => sum + item.amount, 0);
+    const ownerContributions = assumptions.fundingSources.filter(item => ['owner_contribution', 'investor_contribution'].includes(item.type) && item.month === month && month !== 1).reduce((sum, item) => sum + item.amount, 0);
     const investorContributions = 0;
-    const otherFunding = assumptions.fundingSources.filter(item => ['other', 'grant'].includes(item.type) && item.month === month).reduce((sum, item) => sum + item.amount, 0);
-    const deposits = assumptions.startupProjectCosts.filter(item => item.type === 'deposit_or_prepaid' && item.paymentMonth === month).reduce((sum, item) => sum + item.amount, 0);
-    const openingInventoryPurchases = assumptions.startupProjectCosts.filter(item => item.type === 'opening_inventory' && item.paymentMonth === month).reduce((sum, item) => sum + item.amount, 0);
+    const otherFunding = assumptions.fundingSources.filter(item => ['other', 'grant'].includes(item.type) && item.month === month && month !== 1).reduce((sum, item) => sum + item.amount, 0);
+    const deposits = assumptions.startupProjectCosts.filter(item => item.type === 'deposit_or_prepaid' && item.paymentMonth === month && month !== 1).reduce((sum, item) => sum + item.amount, 0);
+    const openingInventoryPurchases = assumptions.startupProjectCosts.filter(item => item.type === 'opening_inventory' && item.paymentMonth === month && month !== 1).reduce((sum, item) => sum + item.amount, 0);
     const startupPayments = expensedStartupCosts + deposits + openingInventoryPurchases;
-    const legacyCapitalCosts = assumptions.startupProjectCosts.filter(item => ['capital_expenditure', 'capital_asset'].includes(item.type) && item.paymentMonth === month && !assets.some(asset => (asset.sourceStartupCostId ?? asset.id) === item.id)).reduce((sum, item) => sum + item.amount, 0);
-    const assetPurchases = assets.filter(asset => asset.purchaseMonth === month).reduce((sum, asset) => sum + asset.purchaseAmount, 0);
+    const legacyCapitalCosts = assumptions.startupProjectCosts.filter(item => ['capital_expenditure', 'capital_asset'].includes(item.type) && item.paymentMonth === month && month !== 1 && !assets.some(asset => (asset.sourceStartupCostId ?? asset.id) === item.id)).reduce((sum, item) => sum + item.amount, 0);
+    const assetPurchases = assets.filter(asset => asset.purchaseMonth === month && month !== 1).reduce((sum, asset) => sum + asset.purchaseAmount, 0);
     const capitalExpenditures = legacyCapitalCosts + assetPurchases;
     const wc = assumptions.workingCapitalAssumptions;
     const enabled = wc.useWorkingCapital ?? Object.keys(wc).some(key => key !== 'notes' && key !== 'useWorkingCapital');
@@ -232,7 +249,7 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const cashReceipts = totalRevenue[index] - changeInAccountsReceivable;
     const cashOperatingPayments = costOfSales + payrollAmount + operatingExpense - changeInAccountsPayable + changeInInventory;
     const principal = (debtRow?.principal_payment || 0) + (debtRow?.balloon_payment || 0);
-    const paidUpfrontFinancingFees = debt.loan_schedules.reduce((sum, schedule) => sum + (schedule.loan.financing_fee_treatment === 'paid_upfront' ? schedule.monthly[index]?.financing_fee || 0 : 0), 0);
+    const paidUpfrontFinancingFees = month === 1 ? 0 : debt.loan_schedules.reduce((sum, schedule) => sum + (schedule.loan.financing_fee_treatment === 'paid_upfront' ? schedule.monthly[index]?.financing_fee || 0 : 0), 0);
     const debtRepayments = principal + interest + paidUpfrontFinancingFees;
     const taxesPaid = taxAccruals[index - Math.max(0, Math.trunc(finite(assumptions.taxAssumptions.paymentLagMonths)))] || 0;
     const financingInflows = loanProceeds + ownerContributions + investorContributions + otherFunding;
@@ -254,7 +271,7 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const investingCashFlow = -capitalExpenditures - deposits - openingInventoryPurchases;
     const financingCashFlow = financingInflows - principal - paidUpfrontFinancingFees;
     const operatingExpensesByLine = expenseProjection.monthlyResults.filter(row => row.monthIndex === index).map(row => ({ id: row.expenseId, name: row.expenseName, amount: row.totalAmount }));
-    const expensedStartupCostsByLine = assumptions.startupProjectCosts.filter(item => ['startup', 'project', 'operating_expense', 'other'].includes(item.type) && item.paymentMonth === month).map(item => ({ id: item.id, name: item.name, amount: nonnegative(item.amount) }));
+    const expensedStartupCostsByLine = assumptions.startupProjectCosts.filter(item => ['startup', 'project', 'operating_expense', 'other'].includes(item.type) && item.paymentMonth === month && month !== 1).map(item => ({ id: item.id, name: item.name, amount: nonnegative(item.amount) }));
     return { month, date: monthDate(assumptions.projectionStartDate, index), ...monthInfo, revenueByStream: revenueRows, totalRevenue: totalRevenue[index], directCostByRevenueStream: directCostRows, directCostsByStream: directCostRows, totalCostOfSales: costOfSales, grossProfit, grossMargin: totalRevenue[index] ? grossProfit / totalRevenue[index] : 0, payroll: payrollAmount, operatingExpenses: operatingExpense, operatingExpensesByLine, expensedStartupCostsByLine, totalOperatingExpenses: totalOperatingExpense, totalOperatingCosts: totalOperatingExpense, fixedOperatingExpenses, revenueBasedOperatingExpenses,
       payrollAndStaffing: { baseCompensation: staffingSum('base_compensation'), employerPayrollCosts: staffingSum('employer_payroll_cost'), benefits: staffingSum('benefits'), bonuses: staffingSum('bonuses'), contractorCosts: staffingSum('contractor_cost'), totalStaffingCost: payrollAmount },
       ebitda, depreciationAndAmortization: depreciation, depreciation, amortization: 0, ebit, interestExpense: interest, earningsBeforeTax, incomeTax, incomeTaxExpense: incomeTax, netIncome: earningsBeforeTax - incomeTax, loanProceeds, loanPrincipalRepayment: principal, loanInterest: interest, endingLoanBalances: debtRow?.closing_balance || 0, endingDebtBalance: debtRow?.closing_balance || 0, ownerContributions, investorContributions, otherFunding, otherFinancingInflows: otherFunding, balloonPayments: debtRow?.balloon_payment || 0, financingFees: debtRow?.financing_fee || 0,
@@ -262,7 +279,25 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
       employeeHeadcount: headcount.employee_headcount, ownerHeadcount: headcount.owner_headcount, contractorCount: headcount.contractor_count, totalPeople: headcount.total_people,
       accountsReceivable: receivables, accountsPayable: payables, inventory, changeInAccountsReceivable, changeInInventory, changeInAccountsPayable, workingCapitalCashFlowImpact, netWorkingCapitalAdjustment: workingCapitalCashFlowImpact, assetPurchases, grossFixedAssets: purchasedAssetCost + legacyAssetCost, depreciationExpense: depreciation, accumulatedDepreciation, netBookValue, netFixedAssets: netBookValue };
   });
-  const statements = buildFinancialStatements(monthly);
+  const openingCurrentDebt = Math.min(openingDebt, monthly.slice(0, 12).reduce((sum, row) => sum + row.loanPrincipalRepayment, 0));
+  const openingTotalAssets = openingCash + openingInventory + openingDeposits + openingFixedAssets;
+  const openingOwnerEquity = finite(assumptions.openingCash) - assumptions.loanAssumptions.filter(loan => (loan.loan_status ?? loan.existing_or_proposed) === 'existing').reduce((sum, loan) => sum + nonnegative(loan.opening_balance), 0) + openingOwnerContributions;
+  const openingRetainedEarnings = -openingExpense - openingFinancingFees;
+  const openingBalanceSheet: BalanceSheet = { cash: openingCash, accountsReceivable: 0, inventory: openingInventory, otherCurrentAssets: 0,
+    totalCurrentAssets: openingCash + openingInventory, grossFixedAssets: openingFixedAssets, accumulatedDepreciation: 0, netFixedAssets: openingFixedAssets,
+    otherAssets: openingDeposits, totalAssets: openingTotalAssets, accountsPayable: 0, currentPortionOfDebt: openingCurrentDebt, otherCurrentLiabilities: 0,
+    totalCurrentLiabilities: openingCurrentDebt, longTermDebt: openingDebt - openingCurrentDebt, totalLiabilities: openingDebt,
+    ownerContributions: openingOwnerEquity, investorContributions: 0, retainedEarnings: openingRetainedEarnings, otherEquity: openingOtherEquity,
+    totalEquity: openingOwnerEquity + openingRetainedEarnings + openingOtherEquity,
+    totalLiabilitiesAndEquity: openingDebt + openingOwnerEquity + openingRetainedEarnings + openingOtherEquity,
+    balanceDifference: 0, isBalanced: true, prepaidExpenses: 0, accruedLiabilities: 0 };
+  openingBalanceSheet.balanceDifference = cents(openingBalanceSheet.totalAssets - openingBalanceSheet.totalLiabilitiesAndEquity);
+  openingBalanceSheet.isBalanced = Math.abs(openingBalanceSheet.balanceDifference) <= .01;
+  const zeroIncome: IncomeStatement = { revenue:0,costOfSales:0,grossProfit:0,grossMargin:0,operatingExpenses:0,payroll:0,startupCosts:0,totalOperatingExpenses:0,ebitda:0,depreciation:0,amortization:0,depreciationAndAmortization:0,ebit:0,interestExpense:0,incomeBeforeTax:0,incomeTax:0,netIncome:0 };
+  const zeroCash: CashFlowStatement = { netIncome:0,depreciationAndAmortization:0,changeInAccountsReceivable:0,changeInInventory:0,changeInAccountsPayable:0,otherOperatingAdjustments:0,cashFlowFromOperatingActivities:0,capitalExpenditures:0,otherInvestingActivities:0,cashFlowFromInvestingActivities:0,ownerContributions:0,investorContributions:0,loanProceeds:0,loanPrincipalRepayments:0,otherFinancingActivities:0,cashFlowFromFinancingActivities:0,netChangeInCash:0,openingCash,closingCash:openingCash };
+  const openingStatement: FinancialStatementPeriod = { label:'Year 0', incomeStatement:zeroIncome, cashFlowStatement:zeroCash, balanceSheet:openingBalanceSheet,
+    reconciliation:{cashRollForwardDifference:0,cashToBalanceSheetDifference:0,debtDifference:0,fixedAssetDifference:0,retainedEarningsDifference:0,balanceDifference:openingBalanceSheet.balanceDifference,balanced:openingBalanceSheet.isBalanced},validation:[] };
+  const statements = buildFinancialStatements(monthly, openingStatement);
   const annual = buildAnnualResults(monthly, assumptions.loanAssumptions.filter(loan => (loan.loan_status ?? loan.existing_or_proposed) === 'existing').reduce((sum, loan) => sum + nonnegative(loan.opening_balance), 0));
   const totals = buildProjectionTotals(monthly, assumptions);
   const validation = validateProjection(monthly, assumptions, debt, expenseProjection);
@@ -301,7 +336,11 @@ function buildProjectionTotals(rows: MonthlyFinancialResult[], assumptions: Fina
   const costs = assumptions.startupProjectCosts.reduce((total, cost) => total + nonnegative(cost.amount), 0);
   const extraAssets = assumptions.depreciationAssumptions.assets.filter(asset => !startupCostIds.has(asset.sourceStartupCostId ?? asset.id)).reduce((total, asset) => total + nonnegative(asset.purchaseAmount ?? asset.cost), 0);
   const totalUses = cents(costs + extraAssets + nonnegative(assumptions.initialCashReserve)); const minimumCashBalance = rows.length ? Math.min(...rows.map(row => row.closingCash)) : assumptions.openingCash;
-  return { totalRevenue: sum('totalRevenue'), totalCostOfSales: sum('totalCostOfSales'), totalGrossProfit: sum('grossProfit'), totalOperatingExpenses: sum('operatingExpenses'), totalPayroll: sum('payroll'), totalEbitda: sum('ebitda'), totalDepreciation: sum('depreciation'), totalInterest: sum('interestExpense'), totalNetIncome: sum('netIncome'), totalCapitalExpenditure: sum('capitalExpenditures'), totalOwnerContributions: sum('ownerContributions'), totalLoanProceeds: sum('loanProceeds'), totalPrincipalRepayment: sum('loanPrincipalRepayment'), totalDebtService: cents(sum('loanPrincipalRepayment') + sum('interestExpense')), endingCash: rows.at(-1)?.closingCash ?? assumptions.openingCash, endingDebt: rows.at(-1)?.endingDebtBalance ?? 0, minimumCashBalance, maximumFundingShortfall: Math.max(0, -minimumCashBalance), firstNegativeCashMonth: rows.find(row => row.closingCash < 0)?.monthIndex ?? null, totalSources, totalUses, sourcesUsesDifference: cents(totalSources - totalUses) };
+  const openingOwner = assumptions.fundingSources.filter(source => ['owner_contribution','investor_contribution'].includes(source.type) && source.month === 1).reduce((total, source) => total + nonnegative(source.amount), 0);
+  const openingLoans = assumptions.loanAssumptions.filter(loan => (loan.loan_status ?? loan.existing_or_proposed) === 'proposed' && loan.loan_start_month === 1).reduce((total, loan) => total + nonnegative(loan.original_principal), 0);
+  const openingCapex = assumptions.startupProjectCosts.filter(cost => ['capital_expenditure','capital_asset'].includes(cost.type) && cost.paymentMonth === 1).reduce((total, cost) => total + nonnegative(cost.amount), 0)
+    + assumptions.depreciationAssumptions.assets.filter(asset => (asset.purchaseMonth ?? asset.inServiceMonth ?? 1) === 1 && !startupCostIds.has(asset.sourceStartupCostId ?? asset.id)).reduce((total, asset) => total + nonnegative(asset.purchaseAmount ?? asset.cost), 0);
+  return { totalRevenue: sum('totalRevenue'), totalCostOfSales: sum('totalCostOfSales'), totalGrossProfit: sum('grossProfit'), totalOperatingExpenses: sum('operatingExpenses'), totalPayroll: sum('payroll'), totalEbitda: sum('ebitda'), totalDepreciation: sum('depreciation'), totalInterest: sum('interestExpense'), totalNetIncome: sum('netIncome'), totalCapitalExpenditure: cents(openingCapex + sum('capitalExpenditures')), totalOwnerContributions: cents(openingOwner + sum('ownerContributions')), totalLoanProceeds: cents(openingLoans + sum('loanProceeds')), totalPrincipalRepayment: sum('loanPrincipalRepayment'), totalDebtService: cents(sum('loanPrincipalRepayment') + sum('interestExpense')), endingCash: rows.at(-1)?.closingCash ?? assumptions.openingCash, endingDebt: rows.at(-1)?.endingDebtBalance ?? 0, minimumCashBalance, maximumFundingShortfall: Math.max(0, -minimumCashBalance), firstNegativeCashMonth: rows.find(row => row.closingCash < 0)?.monthIndex ?? null, totalSources, totalUses, sourcesUsesDifference: cents(totalSources - totalUses) };
 }
 
 function validateProjection(rows: MonthlyFinancialResult[], assumptions: FinancialProjectionAssumptions, debt: ReturnType<typeof calculateDebtService>, expenses: ReturnType<typeof calculateOperatingExpenses>): FinancialProjectionValidation {

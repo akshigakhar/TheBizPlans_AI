@@ -1,13 +1,16 @@
-export function startupExpenseLabel(expenseName) {
-  const normalizedName = String(expenseName)
+export function financialLineItemLabel(name) {
+  return String(name)
     .trim()
+    .replace(/[_-]+/g, ' ')
     .split(/\s+/)
     .map(word => word.length > 1 && word === word.toUpperCase()
       ? word
       : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(' ');
+}
 
-  return `Startup Cost - ${normalizedName}`;
+export function startupExpenseLabel(expenseName) {
+  return `Startup Cost - ${financialLineItemLabel(expenseName)}`;
 }
 
 export function incomeStatementDetailRows(monthly) {
@@ -24,8 +27,8 @@ export function incomeStatementDetailRows(monthly) {
   });
 
   return {
-    revenue: [...revenue].map(([id, label]) => [label, `revenue:${id}`, 'detail']),
-    recurringExpenses: [...recurringExpenses].map(([id, label]) => [label, `expense:${id}`, 'expense-group']),
-    startupExpenses: [...startupExpenses].map(([id, label]) => [startupExpenseLabel(label), `startup:${id}`, 'expense-group']),
+    revenue: [...revenue].map(([id, label]) => [financialLineItemLabel(label), `revenue:${id}`, 'line-item']),
+    recurringExpenses: [...recurringExpenses].map(([id, label]) => [financialLineItemLabel(label), `expense:${id}`, 'line-item']),
+    startupExpenses: [...startupExpenses].map(([id, label]) => [startupExpenseLabel(label), `startup:${id}`, 'line-item startup-line']),
   };
 }

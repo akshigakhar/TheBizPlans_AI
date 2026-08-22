@@ -65,15 +65,15 @@ test('includes owner contributions, grant funding, and capital purchases', () =>
   const row = calculateFinancialProjection(base({ projectionMonths: 1,
     fundingSources: [{ id: 'owner', name: 'Owner', type: 'owner_contribution', amount: 500, month: 1 }, { id: 'grant', name: 'Grant', type: 'grant', amount: 200, month: 1 }],
     startupProjectCosts: [{ id: 'capex', name: 'Computer', amount: 600, paymentMonth: 1, type: 'capital_expenditure' }],
-  })).monthly[0];
-  assert.equal(row.financingInflows, 700); assert.equal(row.capitalExpenditures, 600); assert.equal(row.closingCash, 100);
+  }));
+  assert.equal(row.monthly[0].financingInflows, 0); assert.equal(row.monthly[0].capitalExpenditures, 0); assert.equal(row.statements.opening.balanceSheet.cash, 100); assert.equal(row.statements.opening.balanceSheet.netFixedAssets,600);
 });
 
 test('consolidates legacy investor equity into owner contributions', () => {
   const projection = calculateFinancialProjection(base({ projectionMonths: 1,
     fundingSources: [{ id: 'legacy-investor', name: 'Legacy investor', type: 'investor_contribution', amount: 250, month: 1 }],
   }));
-  assert.equal(projection.monthly[0].ownerContributions, 250);
+  assert.equal(projection.monthly[0].ownerContributions, 0);
   assert.equal(projection.monthly[0].investorContributions, 0);
   assert.equal(projection.statements.monthly[0].balanceSheet.ownerContributions, 250);
 });
@@ -83,12 +83,12 @@ test('treats financing as the source of opening cash and includes the cash reser
     fundingSources: [{ id: 'owner', name: 'Owner investment', type: 'owner_contribution', amount: 1000, month: 1 }],
     startupProjectCosts: [{ id: 'fees', name: 'Professional fees', amount: 700, paymentMonth: 1, type: 'startup' }],
   }));
-  assert.equal(projection.monthly[0].openingCash, 0);
-  assert.equal(projection.monthly[0].ownerContributions, 1000);
+  assert.equal(projection.monthly[0].openingCash, 300);
+  assert.equal(projection.monthly[0].ownerContributions, 0);
   assert.equal(projection.monthly[0].closingCash, 300);
   assert.equal(projection.totals.totalSources, 1000);
   assert.equal(projection.totals.totalUses, 1000);
-  assert.deepEqual(projection.monthly[0].expensedStartupCostsByLine, [{ id: 'fees', name: 'Professional fees', amount: 700 }]);
+  assert.equal(projection.statements.opening.balanceSheet.retainedEarnings,-700);
 });
 
 test('allows negative cash without clipping it', () => {
@@ -169,11 +169,12 @@ test('records an asset purchase as investing cash flow without expensing its ful
     depreciationAssumptions: { assets: [{ id: 'press', name: 'Press', category: 'Equipment', purchaseAmount: 600, purchaseMonth: 1, usefulLifeMonths: 60, residualValue: 0, depreciationMethod: 'straight_line' }] },
   }));
   const row = projection.monthly[0];
-  assert.equal(row.assetPurchases, 600);
-  assert.equal(row.capitalExpenditures, 600);
+  assert.equal(row.assetPurchases, 0);
+  assert.equal(row.capitalExpenditures, 0);
   assert.equal(row.operatingExpenses, 0);
   assert.equal(row.depreciationAndAmortization, 10);
-  assert.equal(projection.statements.monthly[0].cashFlowStatement.cashFlowFromInvestingActivities, -600);
+  assert.equal(Math.abs(projection.statements.monthly[0].cashFlowStatement.cashFlowFromInvestingActivities), 0);
+  assert.equal(projection.statements.opening.balanceSheet.grossFixedAssets,600);
   assert.equal(projection.statements.monthly[0].balanceSheet.netFixedAssets, 590);
 });
 

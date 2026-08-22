@@ -27,23 +27,23 @@ export function buildCashFlowStatement(row: MonthlyFinancialResult): CashFlowSta
 }
 
 export interface BalanceSheetContext {
-  rows: MonthlyFinancialResult[]; index: number; openingContributedCapital: number;
+  rows: MonthlyFinancialResult[]; index: number; opening: BalanceSheet;
 }
 
-export function buildBalanceSheet({ rows, index, openingContributedCapital }: BalanceSheetContext, cashFlow = buildCashFlowStatement(rows[index])): BalanceSheet {
+export function buildBalanceSheet({ rows, index, opening }: BalanceSheetContext, cashFlow = buildCashFlowStatement(rows[index])): BalanceSheet {
   const row = rows[index];
   const currentPortionOfDebt = Math.min(row.endingDebtBalance, rows.slice(index + 1, index + 13).reduce((total, future) => total + future.loanPrincipalRepayment, 0));
   const longTermDebt = Math.max(0, row.endingDebtBalance - currentPortionOfDebt);
-  const otherAssets = rows.slice(0, index + 1).reduce((total, item) => total + item.deposits, 0);
+  const otherAssets = opening.otherAssets + rows.slice(0, index + 1).reduce((total, item) => total + item.deposits, 0);
   const totalCurrentAssets = cashFlow.closingCash + row.accountsReceivable + row.inventory;
   const totalAssets = totalCurrentAssets + row.netFixedAssets + otherAssets;
   const otherCurrentLiabilities = sum(rows.slice(0, index + 1), 'incomeTaxExpense') - sum(rows.slice(0, index + 1), 'taxesPaid');
   const totalCurrentLiabilities = row.accountsPayable + currentPortionOfDebt + otherCurrentLiabilities;
   const totalLiabilities = totalCurrentLiabilities + longTermDebt;
-  const ownerContributions = openingContributedCapital + sum(rows.slice(0, index + 1), 'ownerContributions');
-  const investorContributions = sum(rows.slice(0, index + 1), 'investorContributions');
-  const retainedEarnings = sum(rows.slice(0, index + 1), 'netIncome');
-  const otherEquity = sum(rows.slice(0, index + 1), 'otherFinancingInflows');
+  const ownerContributions = opening.ownerContributions + sum(rows.slice(0, index + 1), 'ownerContributions');
+  const investorContributions = opening.investorContributions + sum(rows.slice(0, index + 1), 'investorContributions');
+  const retainedEarnings = opening.retainedEarnings + sum(rows.slice(0, index + 1), 'netIncome');
+  const otherEquity = opening.otherEquity + sum(rows.slice(0, index + 1), 'otherFinancingInflows');
   const totalEquity = ownerContributions + investorContributions + retainedEarnings + otherEquity;
   const totalLiabilitiesAndEquity = totalLiabilities + totalEquity;
   const balanceDifference = near(totalAssets - totalLiabilitiesAndEquity);
@@ -106,15 +106,15 @@ export function buildAnnualFinancialStatements(rows: MonthlyFinancialResult[], m
   return Array.from({ length: Math.ceil(rows.length / 12) }, (_, year) => { const period = aggregateAnnual(rows, monthly, year); period.validation = validateFinancialStatements(period); return period; });
 }
 
-export function buildFinancialStatements(rows: MonthlyFinancialResult[], openingContributedCapital = rows[0]?.openingCash ?? 0): FinancialStatements {
+export function buildFinancialStatements(rows: MonthlyFinancialResult[], opening: FinancialStatementPeriod): FinancialStatements {
   const monthly = rows.map((row, index): FinancialStatementPeriod => {
     const incomeStatement = buildIncomeStatement(row); const cashFlowStatement = buildCashFlowStatement(row);
-    const balanceSheet = buildBalanceSheet({ rows, index, openingContributedCapital }, cashFlowStatement);
+    const balanceSheet = buildBalanceSheet({ rows, index, opening: opening.balanceSheet }, cashFlowStatement);
     const period: FinancialStatementPeriod = { label: row.date.slice(0, 7), monthIndex: row.monthIndex, date: row.date, projectionYear: row.projectionYear,
-      incomeStatement, cashFlowStatement, balanceSheet, reconciliation: reconciliation(row, incomeStatement, cashFlowStatement, balanceSheet, index ? sum(rows.slice(0, index), 'netIncome') : 0), validation: [] };
+      incomeStatement, cashFlowStatement, balanceSheet, reconciliation: reconciliation(row, incomeStatement, cashFlowStatement, balanceSheet, index ? opening.balanceSheet.retainedEarnings + sum(rows.slice(0, index), 'netIncome') : opening.balanceSheet.retainedEarnings), validation: [] };
     period.validation = validateFinancialStatements(period); return period;
   });
   const annual = buildAnnualFinancialStatements(rows, monthly); const all = [...monthly, ...annual].flatMap(period => period.validation);
   if (monthly.length && monthly.every(period => period.incomeStatement.incomeTax === 0)) all.push({ level: 'ADVISORY', code: 'tax_not_configured', message: 'Income tax is zero; no positive tax expense is projected.' });
-  return { monthly, annual, validation: { errors: all.filter(item => item.level === 'ERROR'), warnings: all.filter(item => item.level === 'WARNING'), advisories: all.filter(item => item.level === 'ADVISORY') } };
+  return { opening, monthly, annual, validation: { errors: all.filter(item => item.level === 'ERROR'), warnings: all.filter(item => item.level === 'WARNING'), advisories: all.filter(item => item.level === 'ADVISORY') } };
 }
