@@ -61,12 +61,21 @@ test('records loan proceeds, repayments, interest, and ending balances', () => {
   assert.equal(rows[1].loanInterest, 0); assert.equal(rows[1].loanPrincipalRepayment, 0); assert.equal(rows[1].endingLoanBalances, 1200);
 });
 
-test('includes owner contributions, other funding, and capital purchases', () => {
+test('includes owner contributions, grant funding, and capital purchases', () => {
   const row = calculateFinancialProjection(base({ projectionMonths: 1,
-    fundingSources: [{ id: 'owner', name: 'Owner', type: 'owner_contribution', amount: 500, month: 1 }, { id: 'grant', name: 'Grant', type: 'other', amount: 200, month: 1 }],
+    fundingSources: [{ id: 'owner', name: 'Owner', type: 'owner_contribution', amount: 500, month: 1 }, { id: 'grant', name: 'Grant', type: 'grant', amount: 200, month: 1 }],
     startupProjectCosts: [{ id: 'capex', name: 'Computer', amount: 600, paymentMonth: 1, type: 'capital_expenditure' }],
   })).monthly[0];
   assert.equal(row.financingInflows, 700); assert.equal(row.capitalExpenditures, 600); assert.equal(row.closingCash, 100);
+});
+
+test('consolidates legacy investor equity into owner contributions', () => {
+  const projection = calculateFinancialProjection(base({ projectionMonths: 1,
+    fundingSources: [{ id: 'legacy-investor', name: 'Legacy investor', type: 'investor_contribution', amount: 250, month: 1 }],
+  }));
+  assert.equal(projection.monthly[0].ownerContributions, 250);
+  assert.equal(projection.monthly[0].investorContributions, 0);
+  assert.equal(projection.statements.monthly[0].balanceSheet.ownerContributions, 250);
 });
 
 test('treats financing as the source of opening cash and includes the cash reserve in project uses', () => {

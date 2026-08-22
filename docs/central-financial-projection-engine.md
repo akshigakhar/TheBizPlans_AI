@@ -22,7 +22,7 @@ The output exposes `months` (and the backwards-compatible `monthly` alias), `ann
 - Interest is an operating cash outflow. Principal and loan proceeds are financing cash flows. Capital purchases, deposits, and opening inventory are investing/asset cash outflows. Expensed startup costs are operating cash outflows and reduce EBITDA and net income; asset-classified startup uses are not expensed.
 - Net cash movement is operating + investing + financing cash flow. Closing cash is opening cash + movement; it is never clamped. Funding shortfall is the positive inverse of the minimum negative closing balance.
 - `capital_expenditure`/`capital_asset` costs are capital purchases; `operating_expense`, `startup`, `project`, and legacy `other` are expensed startup uses; `opening_inventory` and `deposit_or_prepaid` remain separately identified asset uses. No new unclassified record is guessed by the adapter.
-- Owner and investor contributions are equity financing, never revenue. Existing loans create opening debt and no proceeds. Detailed proposed loans are authoritative for proceeds; high-level proposed-loan funding remains sources-and-uses data only and is reconciled with detailed principal.
+- Owner contributions are equity financing, never revenue. Legacy investor contributions are safely consolidated into owner equity. Existing loans create opening debt and no proceeds. Detailed proposed loans are authoritative for proceeds; high-level proposed-loan funding remains sources-and-uses data only and is reconciled with detailed principal.
 - Flow values are summed annually. Opening/ending cash, debt, and headcount are period-boundary values.
 
 ## Precision, placeholders, and validation
