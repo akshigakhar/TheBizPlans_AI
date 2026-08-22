@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, Check, ChevronDown, CircleDollarSign, Download, FileChartColumn, FileSpreadsheet, FileText, Plus, Table2, Trash2, Users } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, Check, ChevronDown, CircleDollarSign, Copy, Download, FileChartColumn, FileSpreadsheet, FileText, PencilLine, Plus, Table2, Trash2, Users, X } from 'lucide-react';
 import { annualize, financialAnalysis, loanSchedule, projectFinancials } from './finance.js';
 import { calculatePayroll, DEPARTMENTS, normalizeStaffingPosition, validateStaffingPosition } from './payroll.ts';
 import { calculateOperatingExpenses, EXPENSE_CATEGORIES, expenseCategoryLabel, normalizeOperatingExpense, validateOperatingExpense } from './operating-expenses.ts';
