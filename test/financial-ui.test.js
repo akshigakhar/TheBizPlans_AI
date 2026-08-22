@@ -23,3 +23,14 @@ test('review renders a complete plan index and keeps generated statements in fin
   }
   assert.match(source, /This section is ready for your content/);
 });
+
+test('financial projections are available before navigating directly to review', async () => {
+  const source = await readFile(new URL('../src/main.jsx', import.meta.url), 'utf8');
+  const effect = source.slice(source.indexOf("const review={assumptions:centralAssumptions"), source.indexOf('const years=annualize(months)'));
+
+  assert.ok(effect.includes('onReviewChange(review)'), 'the calculated review must be published synchronously');
+  assert.ok(
+    effect.indexOf('onReviewChange(review)') < effect.indexOf('calculateFinancialAssumptionsHash(centralAssumptions)'),
+    'review data must be published before waiting for the assumptions hash',
+  );
+});
