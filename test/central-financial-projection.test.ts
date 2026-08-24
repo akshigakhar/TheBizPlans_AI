@@ -12,7 +12,8 @@ const base = (override: Partial<FinancialProjectionAssumptions> = {}): Financial
 test('empty plan returns 36 finite, one-based months and three annual summaries', () => {
   const result = calculateFinancialProjection(base());
   assert.equal(result.months.length, 36); assert.equal(result.annual.length, 3); assert.equal(result.months[0].monthIndex, 1); assert.equal(result.months[12].projectionYear, 2);
-  assert.equal(result.months[0].monthLabel, 'January 2027'); assert.equal(result.metadata.calculationVersion, FINANCIAL_MODEL_VERSION);
+  assert.equal(result.months[0].monthLabel, 'Month 1');
+  assert.equal(calculateFinancialProjection(base({monthDisplayMode:'calendar'})).months[0].monthLabel, 'Jan 2027'); assert.equal(result.metadata.calculationVersion, FINANCIAL_MODEL_VERSION);
   for (const month of result.months) assert.deepEqual([month.totalRevenue, month.ebitda, month.netIncome, month.closingCash, month.endingDebtBalance], [0, 0, 0, 0, 0]);
 });
 
@@ -30,8 +31,8 @@ test('classifies startup assets, expenses, inventory and deposits without expens
     { id: 'equipment', name: 'Equipment', amount: 20000, paymentMonth: 1, type: 'capital_asset' }, { id: 'legal', name: 'Legal', amount: 5000, paymentMonth: 1, type: 'operating_expense' },
     { id: 'stock', name: 'Stock', amount: 2000, paymentMonth: 1, type: 'opening_inventory' }, { id: 'deposit', name: 'Deposit', amount: 1000, paymentMonth: 1, type: 'deposit_or_prepaid' },
   ] }));
-  const month = result.months[0]; assert.equal(month.capitalExpenditures, 0); assert.equal(month.expensedStartupCosts, 0); assert.equal(month.openingInventoryPurchases, 0); assert.equal(month.deposits, 0); assert.equal(month.netIncome, 0); assert.equal(month.openingCash, 22000);
-  assert.deepEqual({ inventory:result.statements.opening.balanceSheet.inventory, fixedAssets:result.statements.opening.balanceSheet.netFixedAssets, deposits:result.statements.opening.balanceSheet.otherAssets, retainedEarnings:result.statements.opening.balanceSheet.retainedEarnings }, { inventory:2000, fixedAssets:20000, deposits:1000, retainedEarnings:-5000 });
+  const month = result.months[0]; assert.equal(month.capitalExpenditures, 0); assert.equal(month.expensedStartupCosts, 5000); assert.equal(month.openingInventoryPurchases, 0); assert.equal(month.deposits, 0); assert.equal(month.netIncome, -5000); assert.equal(month.openingCash, 27000);
+  assert.deepEqual({ inventory:result.statements.opening.balanceSheet.inventory, fixedAssets:result.statements.opening.balanceSheet.netFixedAssets, deposits:result.statements.opening.balanceSheet.otherAssets, retainedEarnings:result.statements.opening.balanceSheet.retainedEarnings }, { inventory:2000, fixedAssets:20000, deposits:1000, retainedEarnings:0 });
   assert.equal(result.statements.monthly[0].balanceSheet.totalAssets, 45000);
   assert.equal(result.statements.monthly[0].balanceSheet.totalEquity, 45000);
   assert.equal(result.statements.monthly[0].balanceSheet.isBalanced, true);

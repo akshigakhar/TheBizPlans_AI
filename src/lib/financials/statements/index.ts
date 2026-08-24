@@ -110,7 +110,7 @@ export function buildFinancialStatements(rows: MonthlyFinancialResult[], opening
   const monthly = rows.map((row, index): FinancialStatementPeriod => {
     const incomeStatement = buildIncomeStatement(row); const cashFlowStatement = buildCashFlowStatement(row);
     const balanceSheet = buildBalanceSheet({ rows, index, opening: opening.balanceSheet }, cashFlowStatement);
-    const period: FinancialStatementPeriod = { label: row.date.slice(0, 7), monthIndex: row.monthIndex, date: row.date, projectionYear: row.projectionYear,
+    const period: FinancialStatementPeriod = { label: row.monthLabel, monthIndex: row.monthIndex, date: row.date, projectionYear: row.projectionYear,
       incomeStatement, cashFlowStatement, balanceSheet, reconciliation: reconciliation(row, incomeStatement, cashFlowStatement, balanceSheet, index ? opening.balanceSheet.retainedEarnings + sum(rows.slice(0, index), 'netIncome') : opening.balanceSheet.retainedEarnings), validation: [] };
     period.validation = validateFinancialStatements(period); return period;
   });
