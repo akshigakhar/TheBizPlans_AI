@@ -34,3 +34,19 @@ test('financial projections are available before navigating directly to review',
     'review data must be published before waiting for the assumptions hash',
   );
 });
+
+test('shared selects render labeled option objects without crashing financial editors', async () => {
+  const source = await readFile(new URL('../src/main.jsx', import.meta.url), 'utf8');
+  const select = source.slice(source.indexOf('function Select('), source.indexOf('function Financials('));
+
+  assert.match(select, /typeof option==='object'/);
+  assert.match(select, /item\.value/);
+  assert.match(select, /item\.label/);
+});
+
+test('payroll receives the timeline used to label staffing months', async () => {
+  const source = await readFile(new URL('../src/main.jsx', import.meta.url), 'utf8');
+
+  assert.match(source, /<PayrollStaffing timeline=\{timeline\}/);
+  assert.match(source, /function PayrollStaffing\(\{timeline,/);
+});
