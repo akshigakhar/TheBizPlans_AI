@@ -14,6 +14,7 @@ export function buildFinancialProjectionAssumptions(plan: PersistedFinancialPlan
   return {
     planId: plan.planId ?? plan.id,
     projectionStartDate: plan.projectionStartDate ?? new Date().toISOString().slice(0, 10),
+    monthDisplayMode: plan.monthDisplayMode === 'calendar' ? 'calendar' : 'generic',
     projectionMonths: plan.projectionMonths ?? 36,
     currency: plan.currency ?? 'USD',
     openingCash: Number(plan.openingCash ?? 0),

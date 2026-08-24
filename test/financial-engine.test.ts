@@ -83,12 +83,13 @@ test('treats financing as the source of opening cash and includes the cash reser
     fundingSources: [{ id: 'owner', name: 'Owner investment', type: 'owner_contribution', amount: 1000, month: 1 }],
     startupProjectCosts: [{ id: 'fees', name: 'Professional fees', amount: 700, paymentMonth: 1, type: 'startup' }],
   }));
-  assert.equal(projection.monthly[0].openingCash, 300);
+  assert.equal(projection.monthly[0].openingCash, 1000);
   assert.equal(projection.monthly[0].ownerContributions, 0);
   assert.equal(projection.monthly[0].closingCash, 300);
   assert.equal(projection.totals.totalSources, 1000);
   assert.equal(projection.totals.totalUses, 1000);
-  assert.equal(projection.statements.opening.balanceSheet.retainedEarnings,-700);
+  assert.equal(projection.statements.opening.balanceSheet.retainedEarnings,0);
+  assert.equal(projection.statements.monthly[0].incomeStatement.startupCosts,700);
 });
 
 test('allows negative cash without clipping it', () => {
@@ -207,4 +208,33 @@ test('delays depreciation, caps residual value, aggregates assets, and prevents 
  assert.equal(projection.monthly[1].capitalExpenditures,66000); assert.equal(projection.monthly[2].depreciationExpense,500); assert.equal(projection.monthly[3].depreciationExpense,1500);
  assert.equal(projection.monthly.at(-1)!.accumulatedDepreciation,60000); assert.equal(projection.monthly.at(-1)!.netFixedAssets,6000);
  assert.equal(projection.annual[0].endingGrossFixedAssets,66000); assert.equal(projection.annual[0].depreciationExpense,14500);
+});
+
+test('V2 required startup case reconciles opening and every operating month without plugs', () => {
+  const loan = { id:'loan-v2', loan_name:'Proposed loan', lender_name:null, loan_type:'term_loan' as const, loan_status:'proposed' as const, original_principal:25000, opening_balance:0, annual_interest_rate:0, amortization_months:60, term_months:null, payment_frequency:'monthly' as const, loan_start_month:1, first_payment_month:2, interest_only_months:0, interest_only_rate_override:null, financing_fee:0, financing_fee_treatment:'paid_upfront' as const, balloon_payment:0, balloon_payment_month:null, notes:'' };
+  const projection = calculateFinancialProjection(base({ initialCashReserve:5000,
+    fundingSources:[{id:'owner-v2',name:'Owner',type:'owner_contribution',amount:10000,month:1}], loanAssumptions:[loan],
+    startupProjectCosts:[
+      {id:'furniture-v2',name:'Furniture',amount:2500,paymentMonth:1,type:'capital_asset'},
+      {id:'renovations-v2',name:'Renovations',amount:25000,paymentMonth:1,type:'capital_asset'},
+      {id:'licensing-v2',name:'Licensing',amount:600,paymentMonth:1,type:'startup'},
+    ], depreciationAssumptions:{assets:[]} }));
+  const opening=projection.statements.opening, month1=projection.statements.monthly[0];
+  assert.deepEqual({cash:opening.balanceSheet.cash,fixedAssets:opening.balanceSheet.grossFixedAssets,totalAssets:opening.balanceSheet.totalAssets,debt:opening.balanceSheet.currentPortionOfDebt+opening.balanceSheet.longTermDebt,owner:opening.balanceSheet.ownerContributions,retained:opening.balanceSheet.retainedEarnings,difference:opening.balanceSheet.balanceDifference},
+    {cash:7500,fixedAssets:27500,totalAssets:35000,debt:25000,owner:10000,retained:0,difference:0});
+  assert.deepEqual({owner:opening.cashFlowStatement.ownerContributions,loan:opening.cashFlowStatement.loanProceeds,capex:opening.cashFlowStatement.capitalExpenditures,closing:opening.cashFlowStatement.closingCash},
+    {owner:10000,loan:25000,capex:-27500,closing:7500});
+  assert.equal(month1.incomeStatement.startupCosts,600);
+  assert.equal(projection.monthly[0].expensedStartupCostsByLine[0].name,'Startup Cost - Licensing');
+  projection.statements.monthly.forEach((period,index)=>{
+    assert.ok(Math.abs(period.balanceSheet.balanceDifference)<=.01);
+    assert.ok(Math.abs(period.cashFlowStatement.closingCash-period.balanceSheet.cash)<=.01);
+    assert.ok(Math.abs(period.reconciliation.debtDifference)<=.01);
+    assert.ok(Math.abs(period.reconciliation.retainedEarningsDifference)<=.01);
+    assert.equal(period.balanceSheet.ownerContributions,10000);
+    assert.equal(period.balanceSheet.otherEquity,0);
+    assert.equal(period.balanceSheet.otherCurrentLiabilities,0);
+    assert.equal(period.cashFlowStatement.otherOperatingAdjustments,0);
+    if(index===0) assert.equal(period.balanceSheet.retainedEarnings,period.incomeStatement.netIncome);
+  });
 });
