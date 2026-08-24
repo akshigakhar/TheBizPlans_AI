@@ -311,7 +311,7 @@ const percentValue=value=>(value*100).toFixed(0)+'%';
 function Metric({label,value,trend}){return <div className="card metric"><span>{label}</span><strong>{value}</strong><small><Check size={13}/>{trend}</small></div>}
 
 function PlanReview({form,review,go}){
- const sections=PLAN_SECTIONS,years=review?.projection?.annual||[];
+ const sections=PLAN_SECTIONS,years=review?.projection?.statements?.annual||[];
  const [filter,setFilter]=useState('all');
  const visibleSections=filter==='financials'?[]:sections;
  const showDocument=filter==='all'||filter==='document';
