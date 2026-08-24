@@ -16,6 +16,8 @@ test('review renders a complete plan index and keeps generated statements in fin
   const source = await readFile(new URL('../src/main.jsx', import.meta.url), 'utf8');
 
   assert.match(source, /const sections=PLAN_SECTIONS/);
+  assert.match(source, /years=review\?\.projection\?\.statements\?\.annual\|\|\[\]/);
+  assert.doesNotMatch(source, /years=review\?\.projection\?\.annual\|\|\[\]/);
   assert.match(source, /<span>Business Plan<\/span>/);
   assert.match(source, /<h2>Financial Projections<\/h2>/);
   for (const page of ['Financial Overview', 'Income Statement', 'Cash Flow Statement', 'Balance Sheet']) {
