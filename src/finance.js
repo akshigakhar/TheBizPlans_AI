@@ -1,3 +1,4 @@
+import { SIMPLE_INCOME_TAX_RATE } from './financial-engine.ts';
 const number = value => Number(value || 0);
 
 export function monthlyPayroll(record = {}) {
@@ -23,7 +24,7 @@ export function loanSchedule({ amount = 0, annualRate = 0, amortizationYears = 5
   });
 }
 
-export function projectFinancials({ price = 85, units = 120, growth = 0.04, directCost = 0.28, expenses = 6200, payroll = 7800, openingCash = 45000, revenues, taxRate = 12, loan = {}, depreciableAssets = 0, depreciationYears = 5, ownerDraws = 0, receivableDays = 0, payableDays = 0, inventory = 0 } = {}) {
+export function projectFinancials({ price = 85, units = 120, growth = 0.04, directCost = 0.28, expenses = 6200, payroll = 7800, openingCash = 45000, revenues, taxRate = SIMPLE_INCOME_TAX_RATE, loan = {}, depreciableAssets = 0, depreciationYears = 5, ownerDraws = 0, receivableDays = 0, payableDays = 0, inventory = 0 } = {}) {
   const streams = revenues || [{ name: 'Revenue', price, units, growth, directCost, seasonal: 0, annualPriceIncrease: 0, refundRate: 0 }];
   const debt = loanSchedule(loan);
   const monthlyDepreciation = number(depreciableAssets) / Math.max(1, number(depreciationYears) * 12);

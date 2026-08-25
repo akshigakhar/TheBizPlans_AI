@@ -1,4 +1,4 @@
-import type { FinancialProjectionAssumptions } from './financial-engine.ts';
+import { SIMPLE_INCOME_TAX_RATE, type FinancialProjectionAssumptions } from './financial-engine.ts';
 
 /**
  * Persisted plan aggregate accepted at the application boundary. The adapter is
@@ -28,6 +28,6 @@ export function buildFinancialProjectionAssumptions(plan: PersistedFinancialPlan
     loanAssumptions: plan.loanAssumptions ? [...plan.loanAssumptions] : [],
     workingCapitalAssumptions: plan.workingCapitalAssumptions ?? {},
     depreciationAssumptions: plan.depreciationAssumptions ?? { assets: [] },
-    taxAssumptions: plan.taxAssumptions ?? { incomeTaxRate: 0 },
+    taxAssumptions: plan.taxAssumptions ?? { incomeTaxRate: SIMPLE_INCOME_TAX_RATE },
   };
 }
