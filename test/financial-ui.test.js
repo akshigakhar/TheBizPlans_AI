@@ -52,3 +52,14 @@ test('payroll receives the timeline used to label staffing months', async () => 
   assert.match(source, /<PayrollStaffing timeline=\{timeline\}/);
   assert.match(source, /function PayrollStaffing\(\{timeline,/);
 });
+
+test('assumption navigation follows the shared section sequence through review', async () => {
+  const source = await readFile(new URL('../src/main.jsx', import.meta.url), 'utf8');
+
+  assert.match(source, /\['loan','5','Loans & Debt Service'/);
+  assert.match(source, /\['workingCapital','6','Working Capital'/);
+  assert.match(source, /\['fixedAssets','7','Fixed Assets & Depreciation'/);
+  assert.match(source, /\['outputs','8','Projection Preview'/);
+  assert.match(source, /const goNext=\(\)=>activeIndex<sections\.length-1\?setActive\(sections\[activeIndex\+1\]\[0\]\):setView\('review'\)/);
+  assert.match(source, /active==='loan'.*onPrevious=\{goPrevious\} onNext=\{goNext\}/);
+});

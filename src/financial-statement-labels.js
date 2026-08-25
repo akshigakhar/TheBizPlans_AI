@@ -10,7 +10,8 @@ export function financialLineItemLabel(name) {
 }
 
 export function startupExpenseLabel(expenseName) {
-  return `Startup Cost - ${financialLineItemLabel(expenseName)}`;
+  const normalizedName = String(expenseName).replace(/^(?:startup\s+cost\s*(?:[-:\u2013\u2014]\s*)?)+/i, '').trim();
+  return `Startup Cost - ${financialLineItemLabel(normalizedName)}`;
 }
 
 export function incomeStatementDetailRows(monthly) {

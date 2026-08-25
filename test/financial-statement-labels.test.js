@@ -8,6 +8,8 @@ test('prefixes and normalizes startup expense labels for income statements', () 
   assert.equal(startupExpenseLabel('legal Fees'), 'Startup Cost - Legal Fees');
   assert.equal(startupExpenseLabel(' accounting fees '), 'Startup Cost - Accounting Fees');
   assert.equal(startupExpenseLabel('CRM software'), 'Startup Cost - CRM Software');
+  assert.equal(startupExpenseLabel('Startup Cost Licensing'), 'Startup Cost - Licensing');
+  assert.equal(startupExpenseLabel('Startup Cost - Startup Cost - marketing'), 'Startup Cost - Marketing');
 });
 
 test('groups non-zero expensed startup costs separately from recurring expenses', () => {
