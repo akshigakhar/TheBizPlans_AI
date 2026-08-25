@@ -1,3 +1,0 @@
-import type { SectionKey } from './sections.ts';
-const canonical=(value:any):any=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>[key,canonical(item)])):value;
-export async function calculateSectionSourceHash(sectionKey:SectionKey,context:unknown):Promise<string>{const bytes=new TextEncoder().encode(JSON.stringify({sectionKey,context:canonical(context)}));const digest=await crypto.subtle.digest('SHA-256',bytes);return `sha256-${Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('')}`;}

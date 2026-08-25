@@ -38,7 +38,7 @@ export interface StaffingProjectionResult {
 const num = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const optional = (value: unknown) => value === '' || value == null ? null : num(value);
 
-/** Normalizes UI/database values and also accepts the legacy prototype field names. */
+/** Normalizes browser form values and also accepts earlier local-draft field names. */
 export function normalizeStaffingPosition(raw: Partial<StaffingPositionInput>): StaffingPositionInput {
   const legacyType = String(raw.compensation_type || '');
   const contractor = legacyType === 'contractor';
