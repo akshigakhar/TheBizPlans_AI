@@ -1,6 +1,0 @@
-import type {EntitlementKey} from './config.ts';
-export type PaymentStatus='checkout_started'|'paid'|'payment_failed'|'refunded'|'disputed';
-export type EntitlementStatus='active'|'suspended'|'revoked';
-export interface Payment{id:string;userId:string;businessPlanId:string;productKey:string;stripeCustomerId?:string;stripeCheckoutSessionId:string;stripePaymentIntentId?:string;stripeChargeId?:string;stripePriceId:string;amount?:number;currency?:string;status:PaymentStatus;paidAt?:string;refundedAt?:string;refundAmount:number;disputeStatus?:string;receiptUrl?:string;metadata?:Record<string,unknown>;createdAt:string;updatedAt:string}
-export interface PlanEntitlement{id:string;userId:string;businessPlanId:string;key:EntitlementKey;sourceType:'payment'|'subscription'|'admin_grant'|'promotion';sourcePaymentId?:string;status:EntitlementStatus;grantedAt:string;revokedAt?:string;createdAt:string;updatedAt:string}
-export interface CheckoutSession{id:string;url:string|null;customer:string;payment_status?:string;payment_intent?:string|null;amount_total?:number|null;currency?:string|null;metadata?:Record<string,string>;line_items?:{data:Array<{price?:{id:string};amount_total?:number|null;currency?:string}>}}

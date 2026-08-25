@@ -1,5 +1,5 @@
 {
-  "name": "thebizplans-ai",
+  "name": "thebizplans-free-business-plan-generator",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -7,20 +7,13 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "test": "node --test",
-    "test:unit": "node --test test/business-plan-context.test.ts",
-    "test:integration": "node --test test/business-plan-generation.integration.test.ts",
     "type-check": "tsc -p tsconfig.json",
-    "lint": "tsc -p tsconfig.json --pretty false",
-    "migration:check": "node scripts/check-migrations.mjs",
-    "database:sql": "node scripts/build-database-sql.mjs"
+    "lint": "tsc -p tsconfig.json --pretty false"
   },
   "dependencies": {
     "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
     "vite": "latest"
-  },
-  "devDependencies": {
-    "supabase": "^2.114.0"
   }
 }

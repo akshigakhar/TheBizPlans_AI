@@ -1,2 +1,0 @@
-import { answer,compact,rows,type PlanSource } from './shared.ts';
-export const buildOwnershipManagementContext=({questionnaire:q}:PlanSource)=>compact({owners:rows(q,'owners').map((x:any)=>({name:x.Name,ownershipPercentage:x['Ownership percentage'],role:x.Position,responsibilities:x.Responsibilities,experience:x.Experience,educationOrCertifications:x['Education or certifications']})),dailyManagement:answer(q,'Who will manage daily operations?'),keyPersonnelOrAdvisors:answer(q,'Are there any advisors or key employees?')});

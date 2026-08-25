@@ -2,7 +2,7 @@ import { SIMPLE_INCOME_TAX_RATE, type FinancialProjectionAssumptions } from './f
 
 /**
  * Persisted plan aggregate accepted at the application boundary. The adapter is
- * deliberately database-client agnostic: callers load all rows before invoking it.
+ * deliberately source-agnostic: callers provide the current browser draft before invoking it.
  */
 export interface PersistedFinancialPlanData extends Partial<FinancialProjectionAssumptions> {
   id?: string;

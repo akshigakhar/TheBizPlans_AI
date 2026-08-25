@@ -4,11 +4,11 @@
 
 Before implementation, the repository contained independent operating-expense (`src/operating-expenses.ts`), staffing (`src/payroll.ts`), and debt-service (`src/loans.ts`) calculators. Revenue and direct-cost assumptions were represented by the legacy aggregate and the original central engine. Startup costs used `startup`, `project`, and `capital_expenditure`; funding supported owner and other contributions. Loans distinguish proposed principal from existing opening balances. Projection months are one-based, percentages are stored as whole percentages, currency is a plan-level ISO-style string, and loan outputs round contractual cash amounts to cents while other modules retain precision until presentation.
 
-The existing in-memory UI has no database query layer or calculated-results table. It starts projections from a plan date, uses a plan currency, and already accepts opening cash, explicit tax rates, working-capital timing, and straight-line depreciable assets. No database persistence was added by this task.
+The browser-only UI starts projections from a plan date, uses a plan currency, and accepts opening cash, explicit tax rates, working-capital timing, and straight-line depreciable assets.
 
 ## Contract and orchestration
 
-`FinancialProjectionAssumptions` is the normalized input. `buildFinancialProjectionAssumptions` converts an already-loaded persisted plan aggregate into that contract. The pure engine performs no database, network, or AI work.
+`FinancialProjectionAssumptions` is the normalized input. `buildFinancialProjectionAssumptions` converts the current local browser draft into that contract. The pure engine performs no network work.
 
 Every projection month is one-based and includes its calendar label, projection year, and days in month. The orchestration order is: months; revenue; direct costs; gross profit; operating expenses; staffing; EBITDA; startup uses; debt schedules; funding; depreciation; EBIT; interest; earnings before tax; explicit tax; working capital; operating, investing, and financing cash flow; cash roll-forward; annual summaries; totals; deterministic validation.
 
