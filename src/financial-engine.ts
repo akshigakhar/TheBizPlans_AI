@@ -1,6 +1,7 @@
 import { calculatePayroll, type StaffingPositionInput } from './payroll.ts';
 import { calculateOperatingExpenses, type OperatingExpense } from './operating-expenses.ts';
 import { calculateDebtService, type Loan } from './loans.ts';
+import { startupExpenseLabel } from './financial-statement-labels.js';
 import { buildFinancialStatements, type FinancialStatements, type FinancialStatementPeriod, type IncomeStatement, type CashFlowStatement, type BalanceSheet } from './lib/financials/statements/index.ts';
 export type { FinancialStatements, FinancialStatementPeriod, IncomeStatement, CashFlowStatement, BalanceSheet } from './lib/financials/statements/index.ts';
 
@@ -273,7 +274,7 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const investingCashFlow = -capitalExpenditures - deposits - openingInventoryPurchases;
     const financingCashFlow = financingInflows - principal - paidUpfrontFinancingFees;
     const operatingExpensesByLine = expenseProjection.monthlyResults.filter(row => row.monthIndex === index).map(row => ({ id: row.expenseId, name: row.expenseName, amount: row.totalAmount }));
-    const expensedStartupCostsByLine = assumptions.startupProjectCosts.filter(item => ['startup', 'project', 'operating_expense', 'other'].includes(item.type) && item.paymentMonth === month).map(item => ({ id: item.id, name: `Startup Cost - ${item.name.trim()}`, amount: nonnegative(item.amount) }));
+    const expensedStartupCostsByLine = assumptions.startupProjectCosts.filter(item => ['startup', 'project', 'operating_expense', 'other'].includes(item.type) && item.paymentMonth === month).map(item => ({ id: item.id, name: startupExpenseLabel(item.name), amount: nonnegative(item.amount) }));
     return { month, date: monthDate(assumptions.projectionStartDate, index), ...monthInfo, revenueByStream: revenueRows, totalRevenue: totalRevenue[index], directCostByRevenueStream: directCostRows, directCostsByStream: directCostRows, totalCostOfSales: costOfSales, grossProfit, grossMargin: totalRevenue[index] ? grossProfit / totalRevenue[index] : 0, payroll: payrollAmount, operatingExpenses: operatingExpense, operatingExpensesByLine, expensedStartupCostsByLine, totalOperatingExpenses: totalOperatingExpense, totalOperatingCosts: totalOperatingExpense, fixedOperatingExpenses, revenueBasedOperatingExpenses,
       payrollAndStaffing: { baseCompensation: staffingSum('base_compensation'), employerPayrollCosts: staffingSum('employer_payroll_cost'), benefits: staffingSum('benefits'), bonuses: staffingSum('bonuses'), contractorCosts: staffingSum('contractor_cost'), totalStaffingCost: payrollAmount },
       ebitda, depreciationAndAmortization: depreciation, depreciation, amortization: 0, ebit, interestExpense: interest, earningsBeforeTax, incomeTax, incomeTaxExpense: incomeTax, netIncome: earningsBeforeTax - incomeTax, loanProceeds, loanPrincipalRepayment: principal, loanInterest: interest, endingLoanBalances: debtRow?.closing_balance || 0, endingDebtBalance: debtRow?.closing_balance || 0, ownerContributions, investorContributions, otherFunding, otherFinancingInflows: otherFunding, balloonPayments: debtRow?.balloon_payment || 0, financingFees: debtRow?.financing_fee || 0,
@@ -288,7 +289,7 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
   const openingRetainedEarnings = 0;
   const openingBalanceSheet: BalanceSheet = { cash: openingCash, accountsReceivable: 0, inventory: openingInventory, otherCurrentAssets: 0,
     totalCurrentAssets: openingCash + openingInventory, grossFixedAssets: openingFixedAssets, accumulatedDepreciation: 0, netFixedAssets: openingFixedAssets,
-    otherAssets: openingOtherAssets, totalAssets: openingTotalAssets, accountsPayable: 0, currentPortionOfDebt: openingCurrentDebt, otherCurrentLiabilities: 0,
+    otherAssets: openingOtherAssets, totalAssets: openingTotalAssets, accountsPayable: 0, taxPayable: 0, currentPortionOfDebt: openingCurrentDebt, otherCurrentLiabilities: 0,
     totalCurrentLiabilities: openingCurrentDebt, longTermDebt: openingDebt - openingCurrentDebt, totalLiabilities: openingDebt,
     ownerContributions: openingOwnerEquity, investorContributions: 0, retainedEarnings: openingRetainedEarnings, otherEquity: openingOtherEquity,
     totalEquity: openingOwnerEquity + openingRetainedEarnings + openingOtherEquity,
@@ -300,7 +301,7 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
   const openingInvesting = -(openingFixedAssets + openingInventory + openingDeposits + openingPaidUpfrontFees);
   const openingFinancing = openingOwnerContributions + openingOtherEquity + openingLoanProceeds;
   const preStartupCash = finite(assumptions.openingCash);
-  const openingCashFlow: CashFlowStatement = { netIncome:0,depreciationAndAmortization:0,changeInAccountsReceivable:0,changeInInventory:0,changeInAccountsPayable:0,otherOperatingAdjustments:0,cashFlowFromOperatingActivities:0,capitalExpenditures:-openingFixedAssets,otherInvestingActivities:-(openingInventory+openingDeposits+openingPaidUpfrontFees),cashFlowFromInvestingActivities:openingInvesting,ownerContributions:openingOwnerContributions,investorContributions:0,loanProceeds:openingLoanProceeds,loanPrincipalRepayments:0,otherFinancingActivities:openingOtherEquity,cashFlowFromFinancingActivities:openingFinancing,netChangeInCash:openingInvesting+openingFinancing,openingCash:preStartupCash,closingCash:openingCash };
+  const openingCashFlow: CashFlowStatement = { netIncome:0,depreciationAndAmortization:0,changeInAccountsReceivable:0,changeInInventory:0,changeInAccountsPayable:0,changeInTaxPayable:0,otherOperatingAdjustments:0,cashFlowFromOperatingActivities:0,capitalExpenditures:-openingFixedAssets,otherInvestingActivities:-(openingInventory+openingDeposits+openingPaidUpfrontFees),cashFlowFromInvestingActivities:openingInvesting,ownerContributions:openingOwnerContributions,investorContributions:0,loanProceeds:openingLoanProceeds,loanPrincipalRepayments:0,otherFinancingActivities:openingOtherEquity,cashFlowFromFinancingActivities:openingFinancing,netChangeInCash:openingInvesting+openingFinancing,openingCash:preStartupCash,closingCash:openingCash };
   const openingStatement: FinancialStatementPeriod = { label:'Opening', incomeStatement:zeroIncome, cashFlowStatement:openingCashFlow, balanceSheet:openingBalanceSheet,
     reconciliation:{cashRollForwardDifference:0,cashToBalanceSheetDifference:0,debtDifference:0,fixedAssetDifference:0,retainedEarningsDifference:0,balanceDifference:openingBalanceSheet.balanceDifference,balanced:openingBalanceSheet.isBalanced},validation:[] };
   const statements = buildFinancialStatements(monthly, openingStatement);

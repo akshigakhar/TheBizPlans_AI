@@ -40,7 +40,8 @@ test('Opening records startup financing, assets, cash, and debt without a balanc
   assert.equal(opening.cash,42500); assert.equal(opening.grossFixedAssets,2500); assert.equal(opening.totalAssets,45000);
   assert.equal(opening.currentPortionOfDebt + opening.longTermDebt,25000); assert.equal(opening.ownerContributions,20000);
   assert.equal(opening.otherCurrentLiabilities,0); assert.equal(opening.otherEquity,0); assert.equal(opening.balanceDifference,0);
-  assert.equal(projection.statements.monthly[0].cashFlowStatement.loanProceeds,0);
+  assert.equal(projection.statements.monthly[0].cashFlowStatement.loanProceeds,25000);
+  assert.equal(projection.statements.monthly[0].cashFlowStatement.openingCash,0);
   const yearOneDebt = projection.statements.annual[0].balanceSheet.currentPortionOfDebt + projection.statements.annual[0].balanceSheet.longTermDebt;
   const principalPaid = projection.monthly.slice(0,12).reduce((sum,row)=>sum+row.loanPrincipalRepayment,0);
   assert.ok(Math.abs(yearOneDebt - (25000-principalPaid)) < .01);
@@ -69,7 +70,7 @@ test('36 monthly statements reconcile and annual flows/balances aggregate correc
   projection.statements.monthly.forEach(period => { assert.equal(period.reconciliation.balanced, true); assert.ok(Object.values(period.incomeStatement).every(Number.isFinite)); });
   const yearOne = projection.statements.annual[0];
   assert.equal(yearOne.incomeStatement.revenue, projection.months.slice(0, 12).reduce((total, row) => total + row.totalRevenue, 0));
-  assert.equal(yearOne.cashFlowStatement.netChangeInCash, projection.months.slice(0, 12).reduce((total, row) => total + row.netCashMovement, 0));
+  assert.equal(yearOne.cashFlowStatement.netChangeInCash, projection.statements.monthly.slice(0, 12).reduce((total, period) => total + period.cashFlowStatement.netChangeInCash, 0));
   assert.equal(yearOne.cashFlowStatement.closingCash, projection.months[11].closingCash); assert.equal(yearOne.balanceSheet, projection.statements.monthly[11].balanceSheet);
 });
 

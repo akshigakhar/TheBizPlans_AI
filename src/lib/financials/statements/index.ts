@@ -14,11 +14,14 @@ export function buildIncomeStatement(row: MonthlyFinancialResult): IncomeStateme
 }
 
 export function buildCashFlowStatement(row: MonthlyFinancialResult): CashFlowStatement {
-  const operating = row.netIncome + row.depreciationAndAmortization - row.changeInAccountsReceivable - row.changeInInventory + row.changeInAccountsPayable;
-  const otherOperatingAdjustments = row.operatingCashFlow - operating;
+  // Income tax is accrued on the income statement and paid using the configured
+  // lag. Its unpaid balance is a real tax payable (Dr tax expense / Cr tax
+  // payable), not a generic cash-flow or balance-sheet balancing adjustment.
+  const changeInTaxPayable = row.incomeTaxExpense - row.taxesPaid;
+  const operating = row.netIncome + row.depreciationAndAmortization - row.changeInAccountsReceivable - row.changeInInventory + row.changeInAccountsPayable + changeInTaxPayable;
   return { netIncome: row.netIncome, depreciationAndAmortization: row.depreciationAndAmortization,
     changeInAccountsReceivable: row.changeInAccountsReceivable, changeInInventory: row.changeInInventory, changeInAccountsPayable: row.changeInAccountsPayable,
-    otherOperatingAdjustments, cashFlowFromOperatingActivities: row.operatingCashFlow,
+    changeInTaxPayable, otherOperatingAdjustments: 0, cashFlowFromOperatingActivities: operating,
     capitalExpenditures: -row.capitalExpenditures, otherInvestingActivities: row.investingCashFlow + row.capitalExpenditures,
     cashFlowFromInvestingActivities: row.investingCashFlow, ownerContributions: row.ownerContributions,
     investorContributions: row.investorContributions, loanProceeds: row.loanProceeds, loanPrincipalRepayments: -row.loanPrincipalRepayment,
@@ -37,8 +40,9 @@ export function buildBalanceSheet({ rows, index, opening }: BalanceSheetContext,
   const otherAssets = opening.otherAssets + rows.slice(0, index + 1).reduce((total, item) => total + item.deposits, 0);
   const totalCurrentAssets = cashFlow.closingCash + row.accountsReceivable + row.inventory;
   const totalAssets = totalCurrentAssets + row.netFixedAssets + otherAssets;
-  const otherCurrentLiabilities = sum(rows.slice(0, index + 1), 'incomeTaxExpense') - sum(rows.slice(0, index + 1), 'taxesPaid');
-  const totalCurrentLiabilities = row.accountsPayable + currentPortionOfDebt + otherCurrentLiabilities;
+  const taxPayable = sum(rows.slice(0, index + 1), 'incomeTaxExpense') - sum(rows.slice(0, index + 1), 'taxesPaid');
+  const otherCurrentLiabilities = 0;
+  const totalCurrentLiabilities = row.accountsPayable + taxPayable + currentPortionOfDebt;
   const totalLiabilities = totalCurrentLiabilities + longTermDebt;
   const ownerContributions = opening.ownerContributions + sum(rows.slice(0, index + 1), 'ownerContributions');
   const investorContributions = opening.investorContributions + sum(rows.slice(0, index + 1), 'investorContributions');
@@ -49,9 +53,9 @@ export function buildBalanceSheet({ rows, index, opening }: BalanceSheetContext,
   const balanceDifference = near(totalAssets - totalLiabilitiesAndEquity);
   return { cash: cashFlow.closingCash, accountsReceivable: row.accountsReceivable, inventory: row.inventory, otherCurrentAssets: 0, totalCurrentAssets,
     grossFixedAssets: row.grossFixedAssets, accumulatedDepreciation: row.accumulatedDepreciation, netFixedAssets: row.netFixedAssets, otherAssets, totalAssets,
-    accountsPayable: row.accountsPayable, currentPortionOfDebt, otherCurrentLiabilities, totalCurrentLiabilities, longTermDebt, totalLiabilities,
+    accountsPayable: row.accountsPayable, taxPayable, currentPortionOfDebt, otherCurrentLiabilities, totalCurrentLiabilities, longTermDebt, totalLiabilities,
     ownerContributions, investorContributions, retainedEarnings, otherEquity, totalEquity, totalLiabilitiesAndEquity,
-    balanceDifference, isBalanced: Math.abs(balanceDifference) <= FINANCIAL_STATEMENT_TOLERANCE, prepaidExpenses: 0, accruedLiabilities: otherCurrentLiabilities };
+    balanceDifference, isBalanced: Math.abs(balanceDifference) <= FINANCIAL_STATEMENT_TOLERANCE, prepaidExpenses: 0, accruedLiabilities: 0 };
 }
 
 function reconciliation(row: MonthlyFinancialResult, income: IncomeStatement, cash: CashFlowStatement, balance: BalanceSheet, priorRetainedEarnings: number): StatementReconciliation {
@@ -94,7 +98,7 @@ function aggregateAnnual(rows: MonthlyFinancialResult[], monthly: FinancialState
     operatingExpenses: flow('operatingExpenses'), payroll: flow('payroll'), startupCosts: flow('startupCosts'), totalOperatingExpenses: flow('totalOperatingExpenses'), ebitda: flow('ebitda'), depreciation: flow('depreciation'), amortization: flow('amortization'),
     depreciationAndAmortization: flow('depreciationAndAmortization'), ebit: flow('ebit'), interestExpense: flow('interestExpense'), incomeBeforeTax: flow('incomeBeforeTax'), incomeTax: flow('incomeTax'), netIncome: flow('netIncome') };
   const cashFlowStatement: CashFlowStatement = { netIncome: cashFlow('netIncome'), depreciationAndAmortization: cashFlow('depreciationAndAmortization'), changeInAccountsReceivable: cashFlow('changeInAccountsReceivable'),
-    changeInInventory: cashFlow('changeInInventory'), changeInAccountsPayable: cashFlow('changeInAccountsPayable'), otherOperatingAdjustments: cashFlow('otherOperatingAdjustments'), cashFlowFromOperatingActivities: cashFlow('cashFlowFromOperatingActivities'),
+    changeInInventory: cashFlow('changeInInventory'), changeInAccountsPayable: cashFlow('changeInAccountsPayable'), changeInTaxPayable: cashFlow('changeInTaxPayable'), otherOperatingAdjustments: cashFlow('otherOperatingAdjustments'), cashFlowFromOperatingActivities: cashFlow('cashFlowFromOperatingActivities'),
     capitalExpenditures: cashFlow('capitalExpenditures'), otherInvestingActivities: cashFlow('otherInvestingActivities'), cashFlowFromInvestingActivities: cashFlow('cashFlowFromInvestingActivities'), ownerContributions: cashFlow('ownerContributions'),
     investorContributions: cashFlow('investorContributions'), loanProceeds: cashFlow('loanProceeds'), loanPrincipalRepayments: cashFlow('loanPrincipalRepayments'), otherFinancingActivities: cashFlow('otherFinancingActivities'),
     cashFlowFromFinancingActivities: cashFlow('cashFlowFromFinancingActivities'), netChangeInCash: cashFlow('netChangeInCash'), openingCash: periods[0].cashFlowStatement.openingCash, closingCash: end.cashFlowStatement.closingCash };
@@ -109,6 +113,14 @@ export function buildAnnualFinancialStatements(rows: MonthlyFinancialResult[], m
 export function buildFinancialStatements(rows: MonthlyFinancialResult[], opening: FinancialStatementPeriod): FinancialStatements {
   const monthly = rows.map((row, index): FinancialStatementPeriod => {
     const incomeStatement = buildIncomeStatement(row); const cashFlowStatement = buildCashFlowStatement(row);
+    // The first presented period starts before startup financing/investing. Fold
+    // the opening transaction layer into Month 1 so those transactions remain
+    // visible once, rather than disappearing inside a post-transaction balance.
+    if (index === 0) {
+      for (const key of ['capitalExpenditures','otherInvestingActivities','cashFlowFromInvestingActivities','ownerContributions','investorContributions','loanProceeds','otherFinancingActivities','cashFlowFromFinancingActivities','netChangeInCash'] as const)
+        cashFlowStatement[key] += opening.cashFlowStatement[key];
+      cashFlowStatement.openingCash = opening.cashFlowStatement.openingCash;
+    }
     const balanceSheet = buildBalanceSheet({ rows, index, opening: opening.balanceSheet }, cashFlowStatement);
     const period: FinancialStatementPeriod = { label: row.monthLabel, monthIndex: row.monthIndex, date: row.date, projectionYear: row.projectionYear,
       incomeStatement, cashFlowStatement, balanceSheet, reconciliation: reconciliation(row, incomeStatement, cashFlowStatement, balanceSheet, index ? opening.balanceSheet.retainedEarnings + sum(rows.slice(0, index), 'netIncome') : opening.balanceSheet.retainedEarnings), validation: [] };

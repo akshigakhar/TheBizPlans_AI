@@ -23,7 +23,8 @@ function statement(title:string,projection:any,key:string){
   const annualRecords=projection?.statements?.annual||projection?.annual||[];
   const monthlyRecords=projection?.statements?.monthly||projection?.monthly||[];
   const sample=annualRecords[0]?.[key]||monthlyRecords[0]?.[key]||{};
-  const lines=Object.keys(sample).filter(k=>typeof sample[k]==='number'&&k!=='balanceDifference').map(k=>({label:label(k),annual:[0,1,2].map(i=>Number(annualRecords[i]?.[key]?.[k]??0)),monthly:monthlyRecords.map((m:any)=>Number(m[key]?.[k]??0)),format:'currency' as const}));
+  const hiddenCompatibilityLines=new Set(['otherOperatingAdjustments','otherCurrentLiabilities','accruedLiabilities','otherEquity','prepaidExpenses']);
+  const lines=Object.keys(sample).filter(k=>typeof sample[k]==='number'&&k!=='balanceDifference'&&!hiddenCompatibilityLines.has(k)).map(k=>({label:label(k),annual:[0,1,2].map(i=>Number(annualRecords[i]?.[key]?.[k]??0)),monthly:monthlyRecords.map((m:any)=>Number(m[key]?.[k]??0)),format:'currency' as const}));
   if(key==='incomeStatement'&&projection?.monthly?.[0]?.revenueByStream){
     const details=incomeStatementDetailRows(projection.monthly);
     const revenue=details.revenue.map(([name,line]:any)=>detailLine(financialLineItemLabel(name),line,projection));

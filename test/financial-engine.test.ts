@@ -174,7 +174,7 @@ test('records an asset purchase as investing cash flow without expensing its ful
   assert.equal(row.capitalExpenditures, 0);
   assert.equal(row.operatingExpenses, 0);
   assert.equal(row.depreciationAndAmortization, 10);
-  assert.equal(Math.abs(projection.statements.monthly[0].cashFlowStatement.cashFlowFromInvestingActivities), 0);
+  assert.equal(projection.statements.monthly[0].cashFlowStatement.cashFlowFromInvestingActivities, -600);
   assert.equal(projection.statements.opening.balanceSheet.grossFixedAssets,600);
   assert.equal(projection.statements.monthly[0].balanceSheet.netFixedAssets, 590);
 });
@@ -224,6 +224,8 @@ test('V2 required startup case reconciles opening and every operating month with
     {cash:7500,fixedAssets:27500,totalAssets:35000,debt:25000,owner:10000,retained:0,difference:0});
   assert.deepEqual({owner:opening.cashFlowStatement.ownerContributions,loan:opening.cashFlowStatement.loanProceeds,capex:opening.cashFlowStatement.capitalExpenditures,closing:opening.cashFlowStatement.closingCash},
     {owner:10000,loan:25000,capex:-27500,closing:7500});
+  assert.deepEqual({opening:month1.cashFlowStatement.openingCash,owner:month1.cashFlowStatement.ownerContributions,loan:month1.cashFlowStatement.loanProceeds,capex:month1.cashFlowStatement.capitalExpenditures},
+    {opening:0,owner:10000,loan:25000,capex:-27500});
   assert.equal(month1.incomeStatement.startupCosts,600);
   assert.equal(projection.monthly[0].expensedStartupCostsByLine[0].name,'Startup Cost - Licensing');
   projection.statements.monthly.forEach((period,index)=>{

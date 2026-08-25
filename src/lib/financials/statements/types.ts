@@ -19,7 +19,7 @@ export interface IncomeStatement {
 
 export interface CashFlowStatement {
   netIncome: number; depreciationAndAmortization: number;
-  changeInAccountsReceivable: number; changeInInventory: number; changeInAccountsPayable: number;
+  changeInAccountsReceivable: number; changeInInventory: number; changeInAccountsPayable: number; changeInTaxPayable: number;
   otherOperatingAdjustments: number; cashFlowFromOperatingActivities: number;
   capitalExpenditures: number; otherInvestingActivities: number; cashFlowFromInvestingActivities: number;
   ownerContributions: number; investorContributions: number; loanProceeds: number;
@@ -30,7 +30,7 @@ export interface CashFlowStatement {
 export interface BalanceSheet {
   cash: number; accountsReceivable: number; inventory: number; otherCurrentAssets: number; totalCurrentAssets: number;
   grossFixedAssets: number; accumulatedDepreciation: number; netFixedAssets: number; otherAssets: number; totalAssets: number;
-  accountsPayable: number; currentPortionOfDebt: number; otherCurrentLiabilities: number; totalCurrentLiabilities: number;
+  accountsPayable: number; taxPayable: number; currentPortionOfDebt: number; otherCurrentLiabilities: number; totalCurrentLiabilities: number;
   longTermDebt: number; totalLiabilities: number;
   ownerContributions: number; investorContributions: number; retainedEarnings: number; otherEquity: number;
   totalEquity: number; totalLiabilitiesAndEquity: number; balanceDifference: number; isBalanced: boolean;
