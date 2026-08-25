@@ -14,14 +14,10 @@ export function buildIncomeStatement(row: MonthlyFinancialResult): IncomeStateme
 }
 
 export function buildCashFlowStatement(row: MonthlyFinancialResult): CashFlowStatement {
-  // Income tax is accrued on the income statement and paid using the configured
-  // lag. Its unpaid balance is a real tax payable (Dr tax expense / Cr tax
-  // payable), not a generic cash-flow or balance-sheet balancing adjustment.
-  const changeInTaxPayable = row.incomeTaxExpense - row.taxesPaid;
-  const operating = row.netIncome + row.depreciationAndAmortization - row.changeInAccountsReceivable - row.changeInInventory + row.changeInAccountsPayable + changeInTaxPayable;
+  const operating = row.netIncome + row.depreciationAndAmortization - row.changeInAccountsReceivable - row.changeInInventory + row.changeInAccountsPayable;
   return { netIncome: row.netIncome, depreciationAndAmortization: row.depreciationAndAmortization,
     changeInAccountsReceivable: row.changeInAccountsReceivable, changeInInventory: row.changeInInventory, changeInAccountsPayable: row.changeInAccountsPayable,
-    changeInTaxPayable, otherOperatingAdjustments: 0, cashFlowFromOperatingActivities: operating,
+    changeInTaxPayable: 0, otherOperatingAdjustments: 0, cashFlowFromOperatingActivities: operating,
     capitalExpenditures: -row.capitalExpenditures, otherInvestingActivities: row.investingCashFlow + row.capitalExpenditures,
     cashFlowFromInvestingActivities: row.investingCashFlow, ownerContributions: row.ownerContributions,
     investorContributions: row.investorContributions, loanProceeds: row.loanProceeds, loanPrincipalRepayments: -row.loanPrincipalRepayment,
@@ -35,12 +31,12 @@ export interface BalanceSheetContext {
 
 export function buildBalanceSheet({ rows, index, opening }: BalanceSheetContext, cashFlow = buildCashFlowStatement(rows[index])): BalanceSheet {
   const row = rows[index];
-  const currentPortionOfDebt = Math.min(row.endingDebtBalance, rows.slice(index + 1, index + 13).reduce((total, future) => total + future.loanPrincipalRepayment, 0));
-  const longTermDebt = Math.max(0, row.endingDebtBalance - currentPortionOfDebt);
+  const currentPortionOfDebt = 0;
+  const longTermDebt = Math.max(0, row.endingDebtBalance);
   const otherAssets = opening.otherAssets + rows.slice(0, index + 1).reduce((total, item) => total + item.deposits, 0);
   const totalCurrentAssets = cashFlow.closingCash + row.accountsReceivable + row.inventory;
   const totalAssets = totalCurrentAssets + row.netFixedAssets + otherAssets;
-  const taxPayable = sum(rows.slice(0, index + 1), 'incomeTaxExpense') - sum(rows.slice(0, index + 1), 'taxesPaid');
+  const taxPayable = 0;
   const otherCurrentLiabilities = 0;
   const totalCurrentLiabilities = row.accountsPayable + taxPayable + currentPortionOfDebt;
   const totalLiabilities = totalCurrentLiabilities + longTermDebt;
@@ -60,7 +56,7 @@ export function buildBalanceSheet({ rows, index, opening }: BalanceSheetContext,
 
 function reconciliation(row: MonthlyFinancialResult, income: IncomeStatement, cash: CashFlowStatement, balance: BalanceSheet, priorRetainedEarnings: number): StatementReconciliation {
   const values = { cashRollForwardDifference: near(cash.closingCash - cash.openingCash - cash.netChangeInCash), cashToBalanceSheetDifference: near(cash.closingCash - balance.cash),
-    debtDifference: near(balance.currentPortionOfDebt + balance.longTermDebt - row.endingDebtBalance),
+    debtDifference: near(balance.longTermDebt - row.endingDebtBalance),
     fixedAssetDifference: near(balance.grossFixedAssets - balance.accumulatedDepreciation - row.netFixedAssets),
     retainedEarningsDifference: near(balance.retainedEarnings - priorRetainedEarnings - income.netIncome), balanceDifference: balance.balanceDifference };
   return { ...values, balanced: Object.values(values).every(value => Math.abs(value) <= FINANCIAL_STATEMENT_TOLERANCE) };
@@ -83,7 +79,7 @@ export function validateFinancialStatements(period: FinancialStatementPeriod): S
   if (period.incomeStatement.grossProfit < -FINANCIAL_STATEMENT_TOLERANCE) add('WARNING', 'negative_gross_profit', `Gross profit is negative for ${period.label}.`, 'incomeStatement', 'grossProfit');
   if (period.incomeStatement.netIncome < -FINANCIAL_STATEMENT_TOLERANCE) add('WARNING', 'net_loss', `A net loss is projected for ${period.label}.`, 'incomeStatement', 'netIncome');
   if (period.balanceSheet.totalCurrentLiabilities > period.balanceSheet.totalCurrentAssets + FINANCIAL_STATEMENT_TOLERANCE) add('WARNING', 'current_liabilities_exceed_assets', `Current liabilities exceed current assets for ${period.label}.`, 'balanceSheet');
-  if (period.balanceSheet.currentPortionOfDebt + period.balanceSheet.longTermDebt === 0) add('ADVISORY', 'no_debt', `No debt is projected for ${period.label}.`);
+  if (period.balanceSheet.longTermDebt === 0) add('ADVISORY', 'no_debt', `No debt is projected for ${period.label}.`);
   if (period.balanceSheet.grossFixedAssets === 0) add('ADVISORY', 'no_fixed_assets', `No fixed assets are projected for ${period.label}.`);
   if (period.balanceSheet.accountsReceivable === 0 && period.balanceSheet.inventory === 0 && period.balanceSheet.accountsPayable === 0) add('ADVISORY', 'no_working_capital', `No working-capital balances are projected for ${period.label}.`);
   return messages;

@@ -25,7 +25,8 @@ export interface DepreciableAssetAssumption {
   /** Legacy aliases retained for existing saved projections. */
   cost?: number; inServiceMonth?: number; salvageValue?: number;
 }
-export interface TaxAssumptions { incomeTaxRate: number; paymentLagMonths?: number }
+export const SIMPLE_INCOME_TAX_RATE = 15;
+export interface TaxAssumptions { incomeTaxRate?: number; /** @deprecated Taxes are paid as incurred. */ paymentLagMonths?: number }
 export interface DepreciationAssumptions { assets: DepreciableAssetAssumption[] }
 export interface WorkingCapitalAssumptions {
   useWorkingCapital?: boolean; notes?: string;
@@ -223,7 +224,8 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const interest = debtRow?.interest_payment || 0;
     const ebit = ebitda - depreciation;
     const earningsBeforeTax = ebit - interest;
-    const incomeTax = Math.max(0, earningsBeforeTax * nonnegative(assumptions.taxAssumptions.incomeTaxRate) / 100);
+    const incomeTaxRate = assumptions.taxAssumptions.incomeTaxRate ?? SIMPLE_INCOME_TAX_RATE;
+    const incomeTax = Math.max(0, earningsBeforeTax * nonnegative(incomeTaxRate) / 100);
     taxAccruals.push(incomeTax);
     const loanProceeds = month === 1 ? 0 : debtRow?.loan_proceeds || 0;
     // Consolidate legacy investor equity into the supported owner-equity flow.
@@ -254,7 +256,8 @@ export function calculateFinancialProjection(assumptions: FinancialAssumptions):
     const principal = (debtRow?.principal_payment || 0) + (debtRow?.balloon_payment || 0);
     const paidUpfrontFinancingFees = month === 1 ? 0 : debt.loan_schedules.reduce((sum, schedule) => sum + (schedule.loan.financing_fee_treatment === 'paid_upfront' ? schedule.monthly[index]?.financing_fee || 0 : 0), 0);
     const debtRepayments = principal + interest + paidUpfrontFinancingFees;
-    const taxesPaid = taxAccruals[index - Math.max(0, Math.trunc(finite(assumptions.taxAssumptions.paymentLagMonths)))] || 0;
+    // The simple model treats corporate income tax as paid in the period incurred.
+    const taxesPaid = incomeTax;
     const financingInflows = loanProceeds + ownerContributions + investorContributions + otherFunding;
     const netCashMovement = cashReceipts - cashOperatingPayments - startupPayments - capitalExpenditures + financingInflows - debtRepayments - taxesPaid;
     const openingCash = cash; cash += netCashMovement;
