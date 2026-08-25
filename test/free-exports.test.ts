@@ -26,9 +26,13 @@ test('free PDF and XLSX exports share current statement values and contain compl
   assert.match(pdfText,/Projected Income Statement - Year 1/);assert.match(pdfText,/MediaBox \[0 0 792 612\]/);
   assert.match(xlsxText,/Sources &amp; Uses/);assert.match(xlsxText,/Cash Flow Statement/);assert.match(xlsxText,/Income Statement/);assert.match(xlsxText,/Balance Sheet/);assert.match(xlsxText,/Assumptions/);
   assert.match(xlsxText,/Jan 2026/);assert.match(xlsxText,/Year 3/);assert.match(xlsxText,/<v>12066<\/v>/);assert.doesNotMatch(xlsxText,/#REF!|#VALUE!|#DIV\/0!/);assert.ok(xlsx.length>1000);
-  assert.match(xlsxText,/<f>SUM\(B2:M2\)<\/f><v>12066<\/v>/);assert.match(xlsxText,/<f>M2<\/f>/);assert.match(xlsxText,/calcMode="auto" fullCalcOnLoad="1"/);
-  assert.match(xlsxText,/<f>B2-B3<\/f><v>750<\/v>/); // Gross Profit
-  assert.match(xlsxText,/<f>B2\+B7<\/f><v>5000<\/v>/); // Closing Cash
-  assert.match(xlsxText,/<f>B5\+B6\+B7<\/f><v>7000<\/v>/); // Total Assets
+  assert.match(xlsxText,/<f>SUM\(B\d+:M\d+\)<\/f><v>12066<\/v>/);assert.match(xlsxText,/<f>M\d+<\/f>/);assert.match(xlsxText,/calcMode="auto" fullCalcOnLoad="1"/);
+  assert.match(xlsxText,/<f>B\d+-B\d+<\/f><v>750<\/v>/); // Gross Profit
+  assert.match(xlsxText,/<f>B\d+\+B\d+<\/f><v>5000<\/v>/); // Closing Cash
+  assert.match(xlsxText,/<f>B\d+\+B\d+\+B\d+<\/f><v>7000<\/v>/); // Total Assets
+  assert.match(xlsxText,/<f>&apos;Income Statement&apos;!B\d+<\/f><v>100<\/v>/); // Cash flow net income is linked to income statement
+  assert.match(xlsxText,/<f>&apos;Cash Flow Statement&apos;!B\d+<\/f><v>5000<\/v>/); // Balance-sheet cash is linked to closing cash
+  assert.match(xlsxText,/<f>B\d+\+&apos;Income Statement&apos;!C\d+<\/f>/); // Retained earnings rolls forward with profit
+  assert.match(xlsxText,/<f>&apos;Income Statement&apos;!A[A-Z]?\d+<\/f><v>12066<\/v>/); // Summary is linked to statement annual totals
   writeFileSync('/tmp/Test-Business-export.pdf',pdf);writeFileSync('/tmp/Test-Business-export.xlsx',xlsx);
 });

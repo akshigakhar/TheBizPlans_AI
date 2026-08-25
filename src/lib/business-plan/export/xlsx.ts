@@ -32,13 +32,16 @@ const professionalLines=(lines:ExportLine[],kind:StatementKind):ExportLine[]=>{
 };
 
 /** Return an Excel calculation for statement totals while preserving source/input rows as values. */
-const statementFormula=(kind:StatementKind,label:string,column:string,rows:Map<string,number>):string|undefined=>{
+const statementFormula=(kind:StatementKind,label:string,column:string,rows:Map<string,number>,month:number):string|undefined=>{
   const ref=(...labels:string[])=>{const row=labels.map(x=>rows.get(normalized(x))).find(Boolean);return row?`${column}${row}`:undefined};
+  const external=(sheetName:string,...labels:string[])=>{const row=labels.map(x=>rowsBySheet[sheetName]?.get(normalized(x))).find(Boolean);return row?`'${sheetName}'!${column}${row}`:undefined};
   const range=(from:string,to:string)=>{const start=rows.get(normalized(from)),end=rows.get(normalized(to));return start&&end?`SUM(${column}${start}:${column}${end})`:undefined};
   const subtract=(left:string[],right:string[])=>{const a=ref(...left),b=ref(...right);return a&&b?`${a}-${b}`:undefined};
   const key=normalized(label);
   if(kind==='cashFlow'){
-    if(['cashflowfromoperatingactivities','netcashfromoperatingactivities'].includes(key))return range('Net Income','Other Operating Adjustments');
+    if(key==='openingcash'&&month>0){const closing=rows.get('closingcash');return closing?`${col(month+1)}${closing}`:undefined}
+    if(key==='netincome')return external('Income Statement','Net Income');
+    if(['cashflowfromoperatingactivities','netcashfromoperatingactivities'].includes(key))return range('Net Income','Other Operating Adjustments')??ref('Net Income');
     if(['cashflowfrominvestingactivities','netcashfrominvestingactivities'].includes(key))return range('Capital Expenditures','Other Investing Activities');
     if(['cashflowfromfinancingactivities','netcashfromfinancingactivities'].includes(key))return range('Owner Contributions','Other Financing Activities');
     if(key==='netchangeincash'){const parts=[ref('Cash Flow From Operating Activities','Net Cash From Operating Activities'),ref('Cash Flow From Investing Activities','Net Cash From Investing Activities'),ref('Cash Flow From Financing Activities','Net Cash From Financing Activities')].filter(Boolean);return parts.length===3?parts.join('+'):undefined}
@@ -52,6 +55,8 @@ const statementFormula=(kind:StatementKind,label:string,column:string,rows:Map<s
     if(key==='netincome')return subtract(['Income Before Tax'],['Income Tax Expense','Income Tax']);
   }
   if(kind==='balanceSheet'){
+    if(key==='cash')return external('Cash Flow Statement','Closing Cash');
+    if(key==='retainedearnings'&&month>0){const row=rows.get('retainedearnings'),income=external('Income Statement','Net Income');return row&&income?`${col(month+1)}${row}+${income}`:undefined}
     if(key==='totalcurrentassets')return range('Cash','Inventory');
     if(key==='totalassets'){const current=ref('Total Current Assets'),fixed=ref('Net Fixed Assets'),other=ref('Other Assets');return current&&fixed&&other?`${current}+${fixed}+${other}`:undefined}
     if(key==='totalliabilities'){const payable=ref('Accounts Payable'),longTerm=ref('Long Term Debt');return payable&&longTerm?`${payable}+${longTerm}`:undefined}
@@ -59,6 +64,9 @@ const statementFormula=(kind:StatementKind,label:string,column:string,rows:Map<s
     if(key==='totalliabilitiesandequity'){const liabilities=ref('Total Liabilities'),equity=ref('Total Equity');return liabilities&&equity?`${liabilities}+${equity}`:undefined}
   }
 };
+
+// Populated before rows are rendered so formulas can deliberately carry values between statements.
+const rowsBySheet:Record<string,Map<string,number>>={};
 
 /** Annual statement columns deliberately retain cached values while exposing the calculation in Excel. */
 const statementRows=(lines:ExportLine[],labels:string[],kind:StatementKind,business:string,currency:string,title:string):Cell[][]=>{
@@ -75,7 +83,7 @@ const statementRows=(lines:ExportLine[],labels:string[],kind:StatementKind,busin
     ...lines.map((line,lineIndex)=>[
       {value:sections.has(normalized(line.label))?line.label.toUpperCase():line.label,style:sections.has(normalized(line.label))?7:major.has(normalized(line.label))?8:0},
       ...line.monthly.map((value,month)=>{
-        const formula=statementFormula(kind,line.label,col(month+2),rowNumbers);
+        const formula=statementFormula(kind,line.label,col(month+2),rowNumbers,month);
         const style=major.has(normalized(line.label))?9:2;
         return formula?{formula,value,style}: {value:value??0,style};
       }),
@@ -103,13 +111,18 @@ const detailRows=(rows:ExportDetailRow[],months=false):Cell[][]=>{
 };
 
 export function generateXlsx(data:BusinessPlanExportData):Uint8Array{
-  const summary:Cell[][]=[['Business Name',data.business.name],['Projection Start Date',data.metadata.projectionStartDate],['Currency',data.metadata.currency],['Financial Snapshot Version',data.metadata.snapshotVersion],[],...lineRows(data.financialSummary,false)];
   const sheets:Array<[string,Cell[][]]>=[];
   const monthCount=Math.max(0,...Object.values(data.financialStatements).flatMap(table=>table.lines.map(line=>line.monthly.length)));
   const labels=data.metadata.monthLabels?.length===monthCount?data.metadata.monthLabels:Array.from({length:monthCount},(_,i)=>`Month ${i+1}`);
-  sheets.push(['Income Statement',statementRows(professionalLines(data.financialStatements.income.lines,'income'),labels,'income',data.business.name,data.metadata.currency,'Income Statement')]);
-  sheets.push(['Cash Flow Statement',statementRows(professionalLines(data.financialStatements.cashFlow.lines,'cashFlow'),labels,'cashFlow',data.business.name,data.metadata.currency,'Cash Flow Statement')]);
-  sheets.push(['Balance Sheet',statementRows(professionalLines(data.financialStatements.balanceSheet.lines,'balanceSheet'),labels,'balanceSheet',data.business.name,data.metadata.currency,'Balance Sheet')]);
+  const statementLines={
+    'Income Statement':professionalLines(data.financialStatements.income.lines,'income'),
+    'Cash Flow Statement':professionalLines(data.financialStatements.cashFlow.lines,'cashFlow'),
+    'Balance Sheet':professionalLines(data.financialStatements.balanceSheet.lines,'balanceSheet'),
+  };
+  for(const [name,lines] of Object.entries(statementLines))rowsBySheet[name]=new Map(lines.map((line,index)=>[normalized(line.label),index+6]));
+  sheets.push(['Income Statement',statementRows(statementLines['Income Statement'],labels,'income',data.business.name,data.metadata.currency,'Income Statement')]);
+  sheets.push(['Cash Flow Statement',statementRows(statementLines['Cash Flow Statement'],labels,'cashFlow',data.business.name,data.metadata.currency,'Cash Flow Statement')]);
+  sheets.push(['Balance Sheet',statementRows(statementLines['Balance Sheet'],labels,'balanceSheet',data.business.name,data.metadata.currency,'Balance Sheet')]);
   const extra=data.financialDetails.assumptions??[];
   sheets.push(['Assumptions',[['Assumption','Value'],...extra.filter(x=>!/sales.tax|gst|hst|pst|vat/i.test(x.label)).map(x=>[x.label,typeof x.description==='number'&&/rate|percent/i.test(x.label)?{value:x.description/100,style:3}:x.description])]]);
   const sourcesAndUses=[...data.financialDetails.funding.map(x=>({...x,category:x.category||'Source'})),...data.financialDetails.startupCosts.map(x=>({...x,category:x.category||'Use'}))];
@@ -118,6 +131,9 @@ export function generateXlsx(data:BusinessPlanExportData):Uint8Array{
   for(const detail of details)if(detail[1].length)sheets.push([detail[0],detailRows(detail[1],detail[2])]);
   if(data.financialDetails.analysis.length)sheets.push(['Financial Analysis',lineRows(data.financialDetails.analysis)]);
   if(data.financialDetails.monthly.length)sheets.push(['Monthly Projections',lineRows(data.financialDetails.monthly,true)]);
+  const summary:Cell[][]=[['Business Name',data.business.name],['Projection Start Date',data.metadata.projectionStartDate],['Currency',data.metadata.currency],['Financial Snapshot Version',data.metadata.snapshotVersion],[],['Metric','Year 1','Year 2','Year 3']];
+  const summarySources:Record<string,string>={revenue:'Income Statement',grossprofit:'Income Statement',ebitda:'Income Statement',netincome:'Income Statement',closingcash:'Cash Flow Statement',totalassets:'Balance Sheet',totalliabilities:'Balance Sheet',totalequity:'Balance Sheet'};
+  data.financialSummary.forEach(line=>summary.push([line.label,...line.annual.map((value,year)=>{const source=summarySources[normalized(line.label)],row=source&&rowsBySheet[source]?.get(normalized(line.label));return row?{formula:`'${source}'!${col(monthCount+2+year)}${row}`,value:value??0,style:2}:value})]));
   sheets.push(['Summary',summary]);
 
   const files:Record<string,string>={
