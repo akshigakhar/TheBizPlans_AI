@@ -12,7 +12,7 @@ const balance=(cashValue:number,debt:number)=>({cash:cashValue,accountsReceivabl
 function fixture(){
   const monthly=Array.from({length:36},(_,i)=>({date:`2026-${String(i%12+1).padStart(2,'0')}-01`,incomeStatement:income(1000+i,100+i),cashFlowStatement:cash(5000+i,100+i),balanceSheet:balance(5000+i,2000-i*10)}));
   const annual=[0,1,2].map(year=>{const rows=monthly.slice(year*12,year*12+12);const revenue=rows.reduce((sum,row)=>sum+row.incomeStatement.revenue,0),netIncome=rows.reduce((sum,row)=>sum+row.incomeStatement.netIncome,0),last=rows[11];return {label:`Year ${year+1}`,incomeStatement:income(revenue,netIncome),cashFlowStatement:cash(last.cashFlowStatement.closingCash,netIncome),balanceSheet:last.balanceSheet}});
-  return {form:{businessName:'Test Business Inc.',currency:'USD',sections:{executiveSummary:{included:true,content:'Two revenue streams and a practical operating plan.'}},financialDraft:{revenues:[{name:'Services',price:100},{name:'Products',price:50}],startup:{equipment:10000,legalFees:500},funding:{ownerInvestment:5000},expenses:[{name:'Rent',amount:1000}],staff:[{name:'Employee',salary_or_hourly_rate:50000}],loans:[{name:'Term loan',original_principal:2000}],tax:{incomeTaxRate:10},workingCapital:{accountsReceivableDays:15}}},review:{assumptions:{projectionStartDate:'2026-01-01',monthDisplayMode:'calendar'},projection:{monthly,annual},analysis:{breakEven:{firstBreakEvenMonth:3}}}};
+  return {form:{businessName:'Test Business Inc.',currency:'USD',sections:{executiveSummary:{included:true,content:'Two revenue streams and a practical operating plan.'}},financialDraft:{revenues:[{name:'Services',price:100},{name:'Products',price:50}],startup:{equipment:10000,legalFees:500},funding:{ownerInvestment:5000},expenses:[{name:'Rent',amount:1000}],staff:[{name:'Employee',salary_or_hourly_rate:50000}],loans:[{name:'Term loan',original_principal:2000}],tax:{incomeTaxRate:10},workingCapital:{accountsReceivableDays:15}}},review:{assumptions:{projectionStartDate:'2026-01-01',monthDisplayMode:'calendar'},projection:{monthly,annual,statements:{monthly,annual}},analysis:{breakEven:{firstBreakEvenMonth:3}}}};
 }
 
 test('free PDF and XLSX exports share current statement values and contain complete periods',()=>{
@@ -20,6 +20,10 @@ test('free PDF and XLSX exports share current statement values and contain compl
   assert.match(pdfText,/^%PDF-1.7/);assert.match(pdfText,/Test Business Inc/);assert.match(pdfText,/Income Statement/);assert.ok(pdf.length>1000);
   assert.deepEqual(data.financialSummary.find((line:any)=>line.label==='Revenue')?.annual,[12066,12210,12354]);
   assert.deepEqual(data.financialSummary.find((line:any)=>line.label==='Closing Cash')?.annual,[5011,5023,5035]);
+  assert.deepEqual(data.financialStatements.income.lines.find((line:any)=>line.label==='Revenue')?.annual,[12066,12210,12354]);
+  assert.equal(data.financialStatements.income.lines.find((line:any)=>line.label==='Revenue')?.monthly.length,36);
+  assert.equal(data.financialStatements.balanceSheet.lines.find((line:any)=>line.label==='Total Assets')?.monthly[35],6685);
+  assert.match(pdfText,/Projected Income Statement - Year 1/);assert.match(pdfText,/MediaBox \[0 0 792 612\]/);
   assert.match(xlsxText,/Sources &amp; Uses/);assert.match(xlsxText,/Cash Flow Statement/);assert.match(xlsxText,/Income Statement/);assert.match(xlsxText,/Balance Sheet/);assert.match(xlsxText,/Assumptions/);
   assert.match(xlsxText,/Jan 2026/);assert.match(xlsxText,/Year 3/);assert.match(xlsxText,/<v>12066<\/v>/);assert.doesNotMatch(xlsxText,/#REF!|#VALUE!|#DIV\/0!/);assert.ok(xlsx.length>1000);
   writeFileSync('/tmp/Test-Business-export.pdf',pdf);writeFileSync('/tmp/Test-Business-export.xlsx',xlsx);
