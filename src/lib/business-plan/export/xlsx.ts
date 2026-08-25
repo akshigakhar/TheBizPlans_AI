@@ -19,19 +19,56 @@ const sheet=(rows:Cell[][],freeze=true)=>`<?xml version="1.0"?><worksheet xmlns=
 
 const lineRows=(lines:ExportLine[],monthly=false):Cell[][]=>[['Metric',...(monthly?Array.from({length:Math.max(0,...lines.map(x=>x.monthly.length))},(_,i)=>`Month ${i+1}`):['Year 1','Year 2','Year 3'])],...lines.map(line=>[line.label,...(monthly?line.monthly:line.annual)])];
 
+type StatementKind='income'|'cashFlow'|'balanceSheet'|'monthly';
+const normalized=(label:string)=>label.trim().toLowerCase().replace(/[^a-z0-9]/g,'');
+
+/** Return an Excel calculation for statement totals while preserving source/input rows as values. */
+const statementFormula=(kind:StatementKind,label:string,column:string,rows:Map<string,number>):string|undefined=>{
+  const ref=(...labels:string[])=>{const row=labels.map(x=>rows.get(normalized(x))).find(Boolean);return row?`${column}${row}`:undefined};
+  const range=(from:string,to:string)=>{const start=rows.get(normalized(from)),end=rows.get(normalized(to));return start&&end?`SUM(${column}${start}:${column}${end})`:undefined};
+  const subtract=(left:string[],right:string[])=>{const a=ref(...left),b=ref(...right);return a&&b?`${a}-${b}`:undefined};
+  const key=normalized(label);
+  if(kind==='cashFlow'){
+    if(['cashflowfromoperatingactivities','netcashfromoperatingactivities'].includes(key))return range('Net Income','Other Operating Adjustments');
+    if(['cashflowfrominvestingactivities','netcashfrominvestingactivities'].includes(key))return range('Capital Expenditures','Other Investing Activities');
+    if(['cashflowfromfinancingactivities','netcashfromfinancingactivities'].includes(key))return range('Owner Contributions','Other Financing Activities');
+    if(key==='netchangeincash'){const parts=[ref('Cash Flow From Operating Activities','Net Cash From Operating Activities'),ref('Cash Flow From Investing Activities','Net Cash From Investing Activities'),ref('Cash Flow From Financing Activities','Net Cash From Financing Activities')].filter(Boolean);return parts.length===3?parts.join('+'):undefined}
+    if(key==='closingcash'){const opening=ref('Opening Cash'),change=ref('Net Change In Cash');return opening&&change?`${opening}+${change}`:undefined}
+  }
+  if(kind==='income'){
+    if(key==='grossprofit')return subtract(['Revenue','Total Revenue'],['Cost Of Goods Sold','Cost of Sales']);
+    if(key==='ebitda')return subtract(['Gross Profit'],['Total Operating Expenses','Operating Expenses']);
+    if(['operatingincome','ebit'].includes(key))return subtract(['EBITDA'],['Depreciation And Amortization','Depreciation']);
+    if(key==='incomebeforetax')return subtract(['Operating Income','EBIT'],['Interest Expense']);
+    if(key==='netincome')return subtract(['Income Before Tax'],['Income Tax Expense','Income Tax']);
+  }
+  if(kind==='balanceSheet'){
+    if(key==='totalcurrentassets')return range('Cash','Inventory');
+    if(key==='totalassets'){const current=ref('Total Current Assets'),fixed=ref('Net Fixed Assets'),other=ref('Other Assets');return current&&fixed&&other?`${current}+${fixed}+${other}`:undefined}
+    if(key==='totalcurrentliabilities')return range('Accounts Payable','Current Portion Of Debt');
+    if(key==='totalliabilities'){const current=ref('Total Current Liabilities'),longTerm=ref('Long Term Debt');return current&&longTerm?`${current}+${longTerm}`:undefined}
+    if(key==='totalequity'){const contributions=ref('Owner Contributions'),earnings=ref('Retained Earnings');return contributions&&earnings?`${contributions}+${earnings}`:undefined}
+    if(key==='totalliabilitiesandequity'){const liabilities=ref('Total Liabilities'),equity=ref('Total Equity');return liabilities&&equity?`${liabilities}+${equity}`:undefined}
+  }
+};
+
 /** Annual statement columns deliberately retain cached values while exposing the calculation in Excel. */
-const statementRows=(lines:ExportLine[],labels:string[],closingBalance=false):Cell[][]=>{
+const statementRows=(lines:ExportLine[],labels:string[],kind:StatementKind='monthly'):Cell[][]=>{
   const monthCount=labels.length;
+  const rowNumbers=new Map(lines.map((line,index)=>[normalized(line.label),index+2]));
   return [
     ['Metric',...labels,'Year 1','Year 2','Year 3'],
     ...lines.map((line,lineIndex)=>[
       line.label,
-      ...line.monthly,
+      ...line.monthly.map((value,month)=>{
+        const formula=statementFormula(kind,line.label,col(month+2),rowNumbers);
+        return formula?{formula,value,style:2}:value;
+      }),
       ...line.annual.map((value,year)=>{
         if(value===null||value===undefined||monthCount===0)return value;
         const row=lineIndex+2,start=year*12+2,end=Math.min(start+11,monthCount+1);
         if(end<start)return value;
-        return closingBalance
+        return kind==='balanceSheet'
           ?{formula:`${col(end)}${row}`,value,style:2}
           :{formula:`SUM(${col(start)}${row}:${col(end)}${row})`,value,style:2};
       }),
@@ -61,9 +98,9 @@ export function generateXlsx(data:BusinessPlanExportData):Uint8Array{
   for(const detail of details)if(detail[1].length)sheets.push([detail[0],detailRows(detail[1],detail[2])]);
   const monthCount=Math.max(0,...Object.values(data.financialStatements).flatMap(table=>table.lines.map(line=>line.monthly.length)));
   const labels=data.metadata.monthLabels?.length===monthCount?data.metadata.monthLabels:Array.from({length:monthCount},(_,i)=>`Month ${i+1}`);
-  sheets.push(['Income Statement',statementRows(data.financialStatements.income.lines,labels)]);
-  sheets.push(['Cash Flow Statement',statementRows(data.financialStatements.cashFlow.lines,labels)]);
-  sheets.push(['Balance Sheet',statementRows(data.financialStatements.balanceSheet.lines,labels,true)]);
+  sheets.push(['Income Statement',statementRows(data.financialStatements.income.lines,labels,'income')]);
+  sheets.push(['Cash Flow Statement',statementRows(data.financialStatements.cashFlow.lines,labels,'cashFlow')]);
+  sheets.push(['Balance Sheet',statementRows(data.financialStatements.balanceSheet.lines,labels,'balanceSheet')]);
   if(data.financialDetails.analysis.length)sheets.push(['Financial Analysis',lineRows(data.financialDetails.analysis)]);
   if(data.financialDetails.monthly.length)sheets.push(['Monthly Projections',statementRows(data.financialDetails.monthly,data.metadata.monthLabels??Array.from({length:36},(_,i)=>`Month ${i+1}`))]);
 

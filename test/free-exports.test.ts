@@ -27,5 +27,8 @@ test('free PDF and XLSX exports share current statement values and contain compl
   assert.match(xlsxText,/Sources &amp; Uses/);assert.match(xlsxText,/Cash Flow Statement/);assert.match(xlsxText,/Income Statement/);assert.match(xlsxText,/Balance Sheet/);assert.match(xlsxText,/Assumptions/);
   assert.match(xlsxText,/Jan 2026/);assert.match(xlsxText,/Year 3/);assert.match(xlsxText,/<v>12066<\/v>/);assert.doesNotMatch(xlsxText,/#REF!|#VALUE!|#DIV\/0!/);assert.ok(xlsx.length>1000);
   assert.match(xlsxText,/<f>SUM\(B2:M2\)<\/f><v>12066<\/v>/);assert.match(xlsxText,/<f>M2<\/f>/);assert.match(xlsxText,/calcMode="auto" fullCalcOnLoad="1"/);
+  assert.match(xlsxText,/<f>B2-B3<\/f><v>750<\/v>/); // Gross Profit
+  assert.match(xlsxText,/<f>B2\+B7<\/f><v>5000<\/v>/); // Closing Cash
+  assert.match(xlsxText,/<f>B5\+B6\+B7<\/f><v>7000<\/v>/); // Total Assets
   writeFileSync('/tmp/Test-Business-export.pdf',pdf);writeFileSync('/tmp/Test-Business-export.xlsx',xlsx);
 });
